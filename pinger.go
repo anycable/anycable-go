@@ -24,7 +24,7 @@ func (p *Pinger) run() {
 		case <-p.ticker.C:
 			if p.count > 0 {
 				log.Debugf("Ping will be sent to %v", p.count)
-				app.BroadcastAll((&Reply{Type: "ping", Message: time.Now().Unix()}).toJSON())
+				app.BroadcastAll((&Reply{Type: "ping", Identifier: "{}", Message: time.Now().Unix()}).toJSON())
 				log.Debugf("Ping was sent to %v", p.count)
 			}
 		case cmd := <-p.cmd:
