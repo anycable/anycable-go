@@ -81,7 +81,7 @@ func (c *Conn) readPump() {
 		msg := &Message{}
 
 		if err := json.Unmarshal(message, &msg); err != nil {
-			log.Debugf("Unknown message: %s", message)
+			log.Debugf("Unable to parse message due to invalid JSON. \nMessage:\n  %s\nError:\n  %s", message, err)
 		} else {
 			log.Debugf("Client message: %s", msg)
 			switch msg.Command {
