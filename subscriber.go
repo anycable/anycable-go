@@ -16,7 +16,7 @@ func (s *Subscriber) run() {
 	c, err := redisurl.ConnectToURL(s.host)
 
 	if err != nil {
-		log.Criticalf("failed to subscribe to Redis: %v", err)
+		app.Logger.Criticalf("failed to subscribe to Redis: %v", err)
 		return
 	}
 
@@ -25,16 +25,16 @@ func (s *Subscriber) run() {
 	for {
 		switch v := psc.Receive().(type) {
 		case redis.Message:
-			log.Debugf("[Redis] channel %s: message: %s\n", v.Channel, v.Data)
+			app.Logger.Debugf("[Redis] channel %s: message: %s\n", v.Channel, v.Data)
 			msg := &StreamMessage{}
 			if err := json.Unmarshal(v.Data, &msg); err != nil {
-				log.Debugf("Unknown message: %s", v.Data)
+				app.Logger.Debugf("Unknown message: %s", v.Data)
 			} else {
-				log.Debugf("Broadcast %v", msg)
+				app.Logger.Debugf("Broadcast %v", msg)
 				hub.stream_broadcast <- msg
 			}
 		case redis.Subscription:
-			log.Debugf("%s: %s %d\n", v.Channel, v.Kind, v.Count)
+			app.Logger.Debugf("%s: %s %d\n", v.Channel, v.Kind, v.Count)
 		case error:
 			break
 		}

@@ -13,14 +13,14 @@ type DisconnectNotifier struct {
 
 func (d *DisconnectNotifier) run() {
 	rate := time.Millisecond * time.Duration(1000/d.rate)
-	log.Debugf("Disconnect rate %v", rate)
+	app.Logger.Debugf("Disconnect rate %v", rate)
 	throttle := time.Tick(rate)
 
 	for {
 		select {
 		case conn := <-d.disconnect:
 			<-throttle
-			log.Debugf("Commit disconnect %v", conn.identifiers)
+			app.Logger.Debugf("Commit disconnect %v", conn.identifiers)
 			rpc.Disconnect(conn.identifiers, SubscriptionsList(conn.subscriptions))
 		}
 	}
