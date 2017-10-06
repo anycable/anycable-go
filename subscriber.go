@@ -28,7 +28,7 @@ func (s *Subscriber) run() {
 			log.Debugf("[Redis] channel %s: message: %s\n", v.Channel, v.Data)
 			msg := &StreamMessage{}
 			if err := json.Unmarshal(v.Data, &msg); err != nil {
-				log.Debugf("Unknown message: %s", v.Data)
+				log.Debugf("Unable to parse message due to invalid JSON. \nMessage:\n  %s\nError:\n  %s", v.Data, err)
 			} else {
 				log.Debugf("Broadcast %v", msg)
 				hub.stream_broadcast <- msg
