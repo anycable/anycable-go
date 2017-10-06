@@ -30,7 +30,7 @@ func NewPinger(interval time.Duration) *Pinger {
 }
 
 func (p *Pinger) run() {
-	log.Debugf("Ping interval %v", p.interval)
+	app.Logger.Debugf("Ping interval %v", p.interval)
 	p.ticker = time.NewTicker(p.interval)
 	defer p.ticker.Stop()
 
@@ -38,9 +38,9 @@ func (p *Pinger) run() {
 		select {
 		case <-p.ticker.C:
 			if p.count > 0 {
-				log.Debugf("Ping will be sent to %v", p.count)
+				app.Logger.Debugf("Ping will be sent to %v", p.count)
 				app.BroadcastAll((&PingReply{Type: "ping", Message: time.Now().Unix()}).toJSON())
-				log.Debugf("Ping was sent to %v", p.count)
+				app.Logger.Debugf("Ping was sent to %v", p.count)
 			}
 		case cmd := <-p.cmd:
 			if cmd == "incr" {
@@ -48,17 +48,17 @@ func (p *Pinger) run() {
 			} else {
 				p.count -= 1
 			}
-			log.Debugf("Ping count %v", p.count)
+			app.Logger.Debugf("Ping count %v", p.count)
 		}
 	}
 }
 
 func (p *Pinger) Increment() {
-	log.Debugf("Increment ping")
+	app.Logger.Debugf("Increment ping")
 	p.cmd <- "incr"
 }
 
 func (p *Pinger) Decrement() {
-	log.Debugf("Decrement ping")
+	app.Logger.Debugf("Decrement ping")
 	p.cmd <- "decr"
 }

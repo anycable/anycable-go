@@ -64,11 +64,11 @@ func (h *Hub) run() {
 	for {
 		select {
 		case conn := <-h.register:
-			log.Debugf("Register connection %v", conn)
+			app.Logger.Debugf("Register connection %v", conn)
 			h.connections[conn] = true
 
 		case conn := <-h.unregister:
-			log.Debugf("Unregister connection %v", conn)
+			app.Logger.Debugf("Unregister connection %v", conn)
 
 			h.UnsubscribeConnection(conn)
 
@@ -77,7 +77,7 @@ func (h *Hub) run() {
 			}
 
 		case message := <-h.broadcast:
-			log.Debugf("Broadcast message %s", message)
+			app.Logger.Debugf("Broadcast message %s", message)
 			for conn := range h.connections {
 				select {
 				case conn.send <- message:
@@ -87,10 +87,10 @@ func (h *Hub) run() {
 			}
 
 		case stream_message := <-h.stream_broadcast:
-			log.Debugf("Broadcast to stream %s: %s", stream_message.Stream, stream_message.Data)
+			app.Logger.Debugf("Broadcast to stream %s: %s", stream_message.Stream, stream_message.Data)
 
 			if _, ok := h.streams[stream_message.Stream]; !ok {
-				log.Debugf("No connections for stream %s", stream_message.Stream)
+				app.Logger.Debugf("No connections for stream %s", stream_message.Stream)
 				break
 			}
 
@@ -113,7 +113,7 @@ func (h *Hub) run() {
 			}
 
 		case subinfo := <-h.subscribe:
-			log.Debugf("Subscribe to stream %s for %s", subinfo.stream, subinfo.conn.identifiers)
+			app.Logger.Debugf("Subscribe to stream %s for %s", subinfo.stream, subinfo.conn.identifiers)
 
 			if _, ok := h.streams[subinfo.stream]; !ok {
 				h.streams[subinfo.stream] = make(map[*Conn]string)
@@ -148,7 +148,7 @@ func (h *Hub) Size() int {
 }
 
 func (h *Hub) UnsubscribeConnection(conn *Conn) {
-	log.Debugf("Unsubscribe from all streams: %s", conn.identifiers)
+	app.Logger.Debugf("Unsubscribe from all streams: %s", conn.identifiers)
 
 	for channel, _ := range h.connection_streams[conn] {
 		h.UnsubscribeConnectionFromChannel(conn, channel)
@@ -158,7 +158,7 @@ func (h *Hub) UnsubscribeConnection(conn *Conn) {
 }
 
 func (h *Hub) UnsubscribeConnectionFromChannel(conn *Conn, channel string) {
-	log.Debugf("Unsubscribe from channel %s: %s", channel, conn.identifiers)
+	app.Logger.Debugf("Unsubscribe from channel %s: %s", channel, conn.identifiers)
 
 	if _, ok := h.connection_streams[conn]; !ok {
 		return

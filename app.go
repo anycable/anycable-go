@@ -4,12 +4,14 @@ import (
 	"encoding/json"
 
 	pb "github.com/anycable/anycable-go/protos"
+	"github.com/op/go-logging"
 )
 
 type App struct {
 	Pinger       *Pinger
 	Subscriber   *Subscriber
 	Disconnector *DisconnectNotifier
+	Logger       *logging.Logger
 }
 
 const (
@@ -36,7 +38,9 @@ func (r *Reply) toJSON() []byte {
 	return jsonStr
 }
 
-var app = &App{}
+var app = &App{
+	Logger: logging.MustGetLogger("main"),
+}
 
 func (app *App) Connected(conn *Conn, transmissions []string) {
 	app.Pinger.Increment()
@@ -48,7 +52,7 @@ func (app *App) Connected(conn *Conn, transmissions []string) {
 
 func (app *App) Subscribe(conn *Conn, msg *Message) {
 	if _, ok := conn.subscriptions[msg.Identifier]; ok {
-		log.Warningf("Already Subscribed to %s", msg.Identifier)
+		app.Logger.Warningf("Already Subscribed to %s", msg.Identifier)
 		return
 	}
 
@@ -58,14 +62,14 @@ func (app *App) Subscribe(conn *Conn, msg *Message) {
 		conn.subscriptions[msg.Identifier] = true
 	}
 
-	log.Debugf("Subscribe %s", res)
+	app.Logger.Debugf("Subscribe %s", res)
 
 	HandleReply(conn, msg, res)
 }
 
 func (app *App) Unsubscribe(conn *Conn, msg *Message) {
 	if _, ok := conn.subscriptions[msg.Identifier]; !ok {
-		log.Warningf("Unknown subscription %s", msg.Identifier)
+		app.Logger.Warningf("Unknown subscription %s", msg.Identifier)
 		return
 	}
 
@@ -80,13 +84,13 @@ func (app *App) Unsubscribe(conn *Conn, msg *Message) {
 
 func (app *App) Perform(conn *Conn, msg *Message) {
 	if _, ok := conn.subscriptions[msg.Identifier]; !ok {
-		log.Warningf("Unknown subscription %s", msg.Identifier)
+		app.Logger.Warningf("Unknown subscription %s", msg.Identifier)
 		return
 	}
 
 	res := rpc.Perform(conn.identifiers, msg.Identifier, msg.Data)
 
-	log.Debugf("Perform %s", res)
+	app.Logger.Debugf("Perform %s", res)
 
 	HandleReply(conn, msg, res)
 }

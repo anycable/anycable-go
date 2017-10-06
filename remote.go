@@ -30,7 +30,7 @@ func (rpc *Remote) Init(host string) {
 	p, err := pool.NewChannelPool(5, 50, factory)
 
 	if err != nil {
-		log.Criticalf("failed to create pool: %v", err)
+		app.Logger.Criticalf("failed to create pool: %v", err)
 	}
 
 	rpc.pool = p
@@ -40,7 +40,7 @@ func (rpc *Remote) GetConn() pool.PoolConn {
 	pc, err := rpc.pool.Get()
 
 	if err != nil {
-		log.Criticalf("failed to retrieve connection: %v", err)
+		app.Logger.Criticalf("failed to retrieve connection: %v", err)
 	}
 
 	return pc
@@ -62,7 +62,7 @@ func (rpc *Remote) VerifyConnection(r *http.Request) *pb.ConnectionResponse {
 	response, err := retry(op)
 
 	if err != nil {
-		log.Errorf("RPC Error: %v", err)
+		app.Logger.Errorf("RPC Error: %v", err)
 		return nil
 	}
 
@@ -127,7 +127,7 @@ func (rpc *Remote) Disconnect(connId string, subscriptions []string) *pb.Disconn
 	response, err := retry(op)
 
 	if err != nil {
-		log.Errorf("RPC Error: %v", err)
+		app.Logger.Errorf("RPC Error: %v", err)
 		return nil
 	}
 
@@ -158,7 +158,7 @@ func retry(callback func() (interface{}, error)) (res interface{}, err error) {
 
 func ParseCommandResponse(response interface{}, err error) *pb.CommandResponse {
 	if err != nil {
-		log.Errorf("RPC Error: %v", err)
+		app.Logger.Errorf("RPC Error: %v", err)
 		return nil
 	}
 

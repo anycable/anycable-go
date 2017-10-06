@@ -61,7 +61,7 @@ var (
 // readPump pumps messages from the websocket connection to the hub.
 func (c *Conn) readPump() {
 	defer func() {
-		log.Debugf("Disconnect on read error")
+		app.Logger.Debugf("Disconnect on read error")
 		app.Disconnected(c)
 		c.ws.Close()
 	}()
@@ -70,7 +70,7 @@ func (c *Conn) readPump() {
 
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway) {
-				log.Debugf("read error: %v", err)
+				app.Logger.Debugf("read error: %v", err)
 			}
 			break
 		}
@@ -78,9 +78,9 @@ func (c *Conn) readPump() {
 		msg := &Message{}
 
 		if err := json.Unmarshal(message, &msg); err != nil {
-			log.Debugf("Unknown message: %s", message)
+			app.Logger.Debugf("Unknown message: %s", message)
 		} else {
-			log.Debugf("Client message: %s", msg)
+			app.Logger.Debugf("Client message: %s", msg)
 			switch msg.Command {
 			case "subscribe":
 				app.Subscribe(c, msg)
@@ -89,7 +89,7 @@ func (c *Conn) readPump() {
 			case "message":
 				app.Perform(c, msg)
 			default:
-				log.Debugf("Unknown command: %s", msg.Command)
+				app.Logger.Debugf("Unknown command: %s", msg.Command)
 			}
 		}
 	}
@@ -130,16 +130,16 @@ func (c *Conn) writePump() {
 func serveWs(w http.ResponseWriter, r *http.Request) {
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Critical(err)
+		app.Logger.Critical(err)
 		return
 	}
 
 	response := rpc.VerifyConnection(r)
 
-	log.Debugf("Auth %s", response)
+	app.Logger.Debugf("Auth %s", response)
 
 	if response.Status != 1 {
-		log.Warningf("Auth Failed")
+		app.Logger.Warningf("Auth Failed")
 		ws.Close()
 		return
 	}
@@ -151,7 +151,7 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	logflag := flag.Bool("log", false, "enable verbose logging")
+	verboseLogging := flag.Bool("log", false, "enable verbose logging")
 	showVersion := flag.Bool("version", false, "show version")
 	flag.Parse()
 
@@ -160,15 +160,7 @@ func main() {
 		return
 	}
 
-	backend := logging.AddModuleLevel(logging.NewLogBackend(os.Stderr, "", 0))
-
-	if *logflag {
-		backend.SetLevel(logging.DEBUG, "")
-	} else {
-		backend.SetLevel(logging.INFO, "")
-	}
-
-	logging.SetBackend(backend)
+	setupLogging(verboseLogging)
 
 	go hub.run()
 
@@ -184,7 +176,19 @@ func main() {
 	app.Disconnector = &DisconnectNotifier{rate: *disconnectRate, disconnect: make(chan *Conn)}
 	go app.Disconnector.run()
 
-	log.Infof("Running AnyCable websocket server v%s on %s at %s", version, *addr, *wspath)
+	app.Logger.Infof("Running AnyCable websocket server v%s on %s at %s", version, *addr, *wspath)
 	http.HandleFunc(*wspath, serveWs)
 	http.ListenAndServe(*addr, nil)
+}
+
+func setupLogging(verboseLogging *bool) {
+	backend := logging.AddModuleLevel(logging.NewLogBackend(os.Stderr, "", 0))
+
+	if *verboseLogging {
+		backend.SetLevel(logging.DEBUG, "")
+	} else {
+		backend.SetLevel(logging.INFO, "")
+	}
+
+	logging.SetBackend(backend)
 }
