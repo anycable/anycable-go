@@ -33,6 +33,9 @@ prepare-cross-mruby:
 prepare-mruby:
 	(cd vendor/github.com/mitchellh/go-mruby && MRUBY_CONFIG=../../../../../../etc/build_config.rb make)
 
+build-mruby:
+	env $(GOBUILD) -tags mrb -o $(OUTPUT) cmd/anycable-go/main.go
+
 build-all-mruby:
 	env $(GOBUILD) -tags mrb -o "dist/anycable-go-$(VERSION)-mrb-macos-amd64" cmd/anycable-go/main.go
 	docker run --rm -v $(PWD):/go/src/github.com/anycable/anycable-go -w /go/src/github.com/anycable/anycable-go -e OUTPUT="dist/anycable-go-$(VERSION)-mrb-linux-amd64" amd64/golang:1.10 make build
