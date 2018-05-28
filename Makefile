@@ -30,6 +30,9 @@ prepare-mruby:
 build-linux:
 	env CGO_ENABLED=0 GOOS=linux GOARCH=386 go build -ldflags "-X main.version=$(VERSION)" -a -installsuffix cgo -o "dist/anycable-go-$(VERSION)-linux-386" cmd/anycable-go/main.go
 
+build-mruby:
+	env CGO_ENABLED=1 go build -ldflags "-s -w -X main.version=$(VERSION)" -o $(OUTPUT) cmd/anycable-go/main.go
+
 build-all-mruby:
 	env CGO_ENABLED=1 go build -ldflags "-s -w -X main.version=$(VERSION)" -o "dist/anycable-go-$(VERSION)-mrb-macos-amd64" cmd/anycable-go/main.go
 	docker run --rm -v $(PWD):/go/src/github.com/anycable/anycable-go -w /go/src/github.com/anycable/anycable-go -e OUTPUT="dist/anycable-go-$(VERSION)-mrb-linux-amd64" amd64/golang:1.10 make build
