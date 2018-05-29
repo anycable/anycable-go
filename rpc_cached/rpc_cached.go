@@ -1,6 +1,8 @@
 package rpc_cached
 
 import (
+	"encoding/json"
+
 	"github.com/anycable/anycable-go/mrb"
 
 	"github.com/anycable/anycable-go/config"
@@ -13,6 +15,16 @@ import (
 const (
 	metricsCacheHit = "rpc_cache_hit"
 )
+
+// Identifier is used to extract channel id from message JSON
+type Identifier struct {
+	Channel string `json:"channel"`
+}
+
+// ActionMessage is used to extract action name from message JSON
+type ActionMessage struct {
+	Action string `json:"action"`
+}
 
 // Controller implements node.Controller interface for gRPC
 type Controller struct {
@@ -58,7 +70,26 @@ func (c *Controller) Unsubscribe(sid string, id string, channel string) (*node.C
 }
 
 // Perform performs Command RPC call with "perform" command
-func (c *Controller) Perform(sid string, id string, channel string, data string) (*node.CommandResult, error) {
+func (c *Controller) Perform(sid string, id string, channel string, data string) (res *node.CommandResult, err error) {
+	identifier := Identifier{}
+
+	err = json.Unmarshal([]byte(channel), &identifier)
+
+	if err != nil {
+		return
+	}
+
+	msg := ActionMessage{}
+	err = json.Unmarshal([]byte(data), &msg)
+
+	if err != nil {
+		return
+	}
+
+	if maction := c.cache.Get(identifier.Channel, msg.Action); maction != nil {
+		return maction.Perform(data)
+	}
+
 	return c.rpc.Perform(sid, id, channel, data)
 }
 

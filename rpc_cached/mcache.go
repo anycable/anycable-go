@@ -89,6 +89,35 @@ func NewMCache(mengine *mrb.Engine) (*MCache, error) {
 	}, nil
 }
 
+// Put compiles method and put it in the cache
+func (c *MCache) Put(channel string, action string, source string) (err error) {
+	// TODO: check for existence, add lock
+	var maction *MAction
+
+	maction, err = NewMAction(c, channel, source)
+
+	if err != nil {
+		return
+	}
+
+	if _, ok := c.store[channel]; !ok {
+		c.store[channel] = make(map[string]*MAction)
+	}
+
+	c.store[channel][action] = maction
+	return
+}
+
+// Get returns cached action for the channel if any
+func (c *MCache) Get(channel string, action string) (maction *MAction) {
+	if _, ok := c.store[channel]; !ok {
+		return
+	}
+
+	maction, _ = c.store[channel][action]
+	return
+}
+
 // MAction is a signle cached channel method
 type MAction struct {
 	compiled *mruby.MrbValue
