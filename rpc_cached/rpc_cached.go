@@ -87,6 +87,14 @@ func (c *Controller) Perform(sid string, id string, channel string, data string)
 	}
 
 	if maction := c.cache.Get(identifier.Channel, msg.Action); maction != nil {
+		c.metrics.Counter(metricsCacheHit).Inc()
+		log.WithFields(
+			log.Fields{
+				"sid":     sid,
+				"context": "rpc",
+				"channel": identifier.Channel,
+				"action":  msg.Action,
+			}).Debugf("cache hit")
 		return maction.Perform(data)
 	}
 

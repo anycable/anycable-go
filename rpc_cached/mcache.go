@@ -2,6 +2,7 @@ package rpc_cached
 
 import (
 	"strings"
+	"sync"
 
 	"github.com/anycable/anycable-go/mrb"
 	"github.com/anycable/anycable-go/node"
@@ -121,6 +122,7 @@ func (c *MCache) Get(channel string, action string) (maction *MAction) {
 // MAction is a signle cached channel method
 type MAction struct {
 	compiled *mruby.MrbValue
+	mu       sync.Mutex
 }
 
 // NewMAction compiles a channel method within mruby VM
@@ -153,6 +155,9 @@ func NewMAction(cache *MCache, channel string, source string) (*MAction, error) 
 
 // Perform executes action within mruby
 func (m *MAction) Perform(data string) (*node.CommandResult, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	result, err := m.compiled.Call("perform", mruby.String(data))
 
 	if err != nil {
