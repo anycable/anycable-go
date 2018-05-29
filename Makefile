@@ -81,6 +81,7 @@ test:
 		github.com/anycable/anycable-go/pool \
 		github.com/anycable/anycable-go/pubsub \
 		github.com/anycable/anycable-go/rpc \
+		github.com/anycable/anycable-go/rpc_cached \
 		github.com/anycable/anycable-go/server \
 		github.com/anycable/anycable-go/metrics \
 		github.com/anycable/anycable-go/mrb \

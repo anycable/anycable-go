@@ -1,7 +1,6 @@
 package rpc_cached
 
 import (
-	"log"
 	"strings"
 
 	"github.com/anycable/anycable-go/mrb"
@@ -20,25 +19,6 @@ type MCallResult struct {
 type MCache struct {
 	engine *mrb.Engine
 	store  map[string]map[string]*MAction
-}
-
-var (
-	// MrbCache is a global channels methods cache
-	MrbCache *MCache
-)
-
-// InitCache creates global cache
-func InitCache() {
-	if MrbCache != nil {
-		return
-	}
-
-	var err error
-	MrbCache, err = NewMCache(mrb.DefaultEngine())
-
-	if err != nil {
-		log.Fatalf("Failed to initialize MrbCache: %s", err)
-	}
 }
 
 // NewMCache builds a new cache struct for mruby engine
@@ -115,7 +95,7 @@ type MAction struct {
 }
 
 // NewMAction compiles a channel method within mruby VM
-func NewMAction(engine *mrb.Engine, channel string, source string) (*MAction, error) {
+func NewMAction(cache *MCache, channel string, source string) (*MAction, error) {
 	var buf strings.Builder
 
 	channelClass := "CachedChannel_" + channel
@@ -126,6 +106,8 @@ func NewMAction(engine *mrb.Engine, channel string, source string) (*MAction, er
 	buf.WriteString("identify \"" + channel + "\"\n")
 	buf.WriteString(source + "\n")
 	buf.WriteString("end\n")
+
+	engine := cache.engine
 
 	err := engine.LoadString(buf.String())
 

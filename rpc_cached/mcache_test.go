@@ -3,6 +3,7 @@
 package rpc_cached
 
 import (
+	"log"
 	"testing"
 
 	"github.com/anycable/anycable-go/mrb"
@@ -10,13 +11,22 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+var (
+	cache *MCache
+)
+
 func init() {
-	InitCache()
+	var err error
+	cache, err = NewMCache(mrb.DefaultEngine())
+
+	if err != nil {
+		log.Fatalf("Failed to initialize mruby cache: %s", err)
+	}
 }
 
 func TestMAction(t *testing.T) {
 	maction, err := NewMAction(
-		mrb.DefaultEngine(),
+		cache,
 		"BenchmarkChannel",
 		`
 		def echo(data)
