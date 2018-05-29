@@ -46,6 +46,39 @@ func NewController(config *config.Config, metrics *metrics.Metrics) *Controller 
 func (c *Controller) Start() (err error) {
 	err = c.rpc.Start()
 	c.cache, err = NewMCache(mrb.DefaultEngine())
+
+	err = c.cache.Put(
+		"BenchmarkChannel",
+		"echo",
+		`
+		def echo(data)
+			transmit data
+		end
+		`,
+	)
+
+	if err != nil {
+		log.Fatalf("Failed to compile 'echo' method: %s", err)
+	}
+
+	err = c.cache.Put(
+		"BenchmarkChannel",
+		"broadcast",
+		`
+		def broadcast(data)
+  	  server_broadcast "all", data
+    	data["action"] = "broadcastResult"
+    	transmit data
+		end
+		`,
+	)
+
+	if err != nil {
+		log.Fatalf("Failed to compile 'broadcast' method: %s", err)
+	}
+
+	log.WithField("context", "rpc").Info("Cache initialized")
+
 	return
 }
 

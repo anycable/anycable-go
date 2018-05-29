@@ -37,6 +37,7 @@ type CommandResult struct {
 	Streams        []string
 	StopAllStreams bool
 	Transmissions  []string
+	Broadcasts     []string
 	Disconnect     bool
 }
 
@@ -327,6 +328,12 @@ func (n *Node) handleCommandReply(s *Session, msg *Message, reply *CommandResult
 
 	for _, stream := range reply.Streams {
 		n.hub.subscribe <- &SubscriptionInfo{session: s.UID, stream: stream, identifier: msg.Identifier}
+	}
+
+	if reply.Broadcasts != nil {
+		for _, msg := range reply.Broadcasts {
+			n.HandlePubsub([]byte(msg))
+		}
 	}
 
 	transmit(s, reply.Transmissions)

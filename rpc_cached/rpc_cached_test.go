@@ -99,3 +99,19 @@ func BenchmarkCachedActionEcho(b *testing.B) {
 		)
 	}
 }
+
+func BenchmarkCachedActionBroadcast(b *testing.B) {
+	m := metrics.NewMetrics(nil, 10)
+	c := &config.Config{}
+	controller := NewController(c, m)
+	controller.Start()
+
+	for i := 0; i < b.N; i++ {
+		controller.Perform(
+			"test",
+			"",
+			"{\"channel\":\"BenchmarkChannel\"}",
+			"{\"action\":\"broadcast\",\"text\":\"hello\"}",
+		)
+	}
+}

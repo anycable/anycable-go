@@ -14,6 +14,7 @@ type MCallResult struct {
 	Streams        []string `mruby:"streams"`
 	StopAllStreams bool     `mruby:"stop_all_streams"`
 	Transmissions  []string `mruby:"transmissions"`
+	Broadcasts     []string `mruby:"broadcasts"`
 }
 
 // MCache is a cache of mruby compiled channels methods
@@ -30,12 +31,13 @@ func NewMCache(mengine *mrb.Engine) (*MCache, error) {
 	module AnyCable
 		class Channel
 			class Result
-				attr_reader :streams, :transmissions
+				attr_reader :streams, :transmissions, :broadcasts
 				attr_accessor :stop_all_streams
 
 				def initialize
 					@streams = []
 					@transmissions = []
+					@broadcasts = []
 					@stop_all_streams = false
 				end
 
@@ -43,6 +45,7 @@ func NewMCache(mengine *mrb.Engine) (*MCache, error) {
 					{
 						streams: streams,
 						transmissions: transmissions,
+						broadcasts: broadcasts,
 						stop_all_streams: stop_all_streams
 					}
 				end
@@ -73,6 +76,13 @@ func NewMCache(mengine *mrb.Engine) (*MCache, error) {
 				result.transmissions << {
 					identifier: self.class.identifier,
 					message: data
+				}.to_json
+			end
+
+			def server_broadcast(stream, data)
+				result.broadcasts << {
+					stream: stream,
+					data: data.to_json
 				}.to_json
 			end
 		end
@@ -176,6 +186,7 @@ func (m *MAction) Perform(data string) (*node.CommandResult, error) {
 		Transmissions:  decoded.Transmissions,
 		StopAllStreams: decoded.StopAllStreams,
 		Streams:        decoded.Streams,
+		Broadcasts:     decoded.Broadcasts,
 	}
 
 	return res, nil
