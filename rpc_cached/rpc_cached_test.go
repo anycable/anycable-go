@@ -31,7 +31,7 @@ func TestCachedPerform(t *testing.T) {
 	m := metrics.NewMetrics(nil, 10)
 	c := &config.Config{}
 	controller := NewController(c, m)
-	controller.Start()
+	controller.cache = cache
 
 	res, err := controller.Perform(
 		"test",
@@ -46,7 +46,7 @@ func TestCachedPerform(t *testing.T) {
 
 	assert.Equal(
 		t,
-		[]string{"{\"identifier\":\"" + identifier + "\",\"message\":{\"action\":\"echo\",\"text\":\"hello\"}}"},
+		[]string{"{\"identifier\":\"" + identifier + "\",\"message\":{\"response\":{\"action\":\"echo\",\"text\":\"hello\"}}}"},
 		res.Transmissions,
 	)
 }
@@ -55,7 +55,7 @@ func TestConcurrentCachedPerform(t *testing.T) {
 	m := metrics.NewMetrics(nil, 10)
 	c := &config.Config{}
 	controller := NewController(c, m)
-	controller.Start()
+	controller.cache = cache
 
 	var wg sync.WaitGroup
 
@@ -88,7 +88,7 @@ func BenchmarkCachedActionEcho(b *testing.B) {
 	m := metrics.NewMetrics(nil, 10)
 	c := &config.Config{}
 	controller := NewController(c, m)
-	controller.Start()
+	controller.cache = cache
 
 	for i := 0; i < b.N; i++ {
 		controller.Perform(
