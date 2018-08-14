@@ -90,6 +90,10 @@ func BenchmarkCachedActionEcho(b *testing.B) {
 	controller := NewController(c, m)
 	controller.cache = cache
 
+	cache.engine.VM.FullGC()
+
+	origObjects := cache.engine.VM.LiveObjectCount()
+
 	for i := 0; i < b.N; i++ {
 		controller.Perform(
 			"test",
@@ -97,5 +101,11 @@ func BenchmarkCachedActionEcho(b *testing.B) {
 			"{\"channel\":\"BenchmarkChannel\"}",
 			"{\"action\":\"echo\",\"text\":\"hello\"}",
 		)
+	}
+
+	newObjects := cache.engine.VM.LiveObjectCount()
+
+	if origObjects != newObjects {
+		b.Fatalf("Object count was not what was expected after action call: %d %d", origObjects, newObjects)
 	}
 }

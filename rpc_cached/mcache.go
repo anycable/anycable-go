@@ -125,6 +125,7 @@ func (c *MCache) Get(channel string, action string) (maction *MAction) {
 type MAction struct {
 	compiled *mruby.MrbValue
 	mu       sync.Mutex
+	cache    *MCache
 }
 
 // NewMAction compiles a channel method within mruby VM
@@ -152,13 +153,17 @@ func NewMAction(cache *MCache, channel string, source string) (*MAction, error) 
 
 	mchannelValue := mchannel.MrbValue(engine.VM)
 
-	return &MAction{compiled: mchannelValue}, nil
+	cache.engine.VM.IncrementalGC()
+
+	return &MAction{compiled: mchannelValue, cache: cache}, nil
 }
 
 // Perform executes action within mruby
 func (m *MAction) Perform(data string) (*node.CommandResult, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	arenaIdx := m.cache.engine.VM.ArenaSave()
 
 	result, err := m.compiled.Call("perform", mruby.String(data))
 
@@ -169,6 +174,10 @@ func (m *MAction) Perform(data string) (*node.CommandResult, error) {
 	decoded := MCallResult{}
 
 	err = mruby.Decode(&decoded, result)
+
+	m.cache.engine.VM.ArenaRestore(arenaIdx)
+
+	m.cache.engine.VM.IncrementalGC()
 
 	if err != nil {
 		return nil, err

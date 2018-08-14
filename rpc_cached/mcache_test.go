@@ -37,9 +37,19 @@ func TestMAction(t *testing.T) {
 
 	assert.Nil(t, err)
 
+	cache.engine.VM.FullGC()
+
+	origObjects := cache.engine.VM.LiveObjectCount()
+
 	res, err := maction.Perform("{\"action\":\"echo\",\"text\":\"hello\"}")
 
 	assert.Nil(t, err)
+
+	newObjects := cache.engine.VM.LiveObjectCount()
+
+	if origObjects != newObjects {
+		t.Fatalf("Object count was not what was expected after action call: %d %d", origObjects, newObjects)
+	}
 
 	identifier := "{\\\"channel\\\":\\\"BenchmarkChannel\\\"}"
 
