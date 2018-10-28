@@ -3,6 +3,8 @@
 package metrics
 
 import (
+	"sync"
+
 	"github.com/anycable/anycable-go/mrb"
 	"github.com/apex/log"
 	"github.com/mitchellh/go-mruby"
@@ -12,14 +14,13 @@ import (
 type RubyPrinter struct {
 	mrbModule *mruby.MrbValue
 	engine    *mrb.Engine
+	mu        sync.Mutex
 }
 
 // NewCustomPrinter generates log formatter from the provided (as path)
 // Ruby script
 func NewCustomPrinter(path string) (*RubyPrinter, error) {
-	// return nil, errors.New("Not supported")
-
-	engine := mrb.DefaultEngine()
+	engine := mrb.NewEngine()
 
 	if err := engine.LoadFile(path); err != nil {
 		return nil, err
@@ -34,7 +35,14 @@ func NewCustomPrinter(path string) (*RubyPrinter, error) {
 
 // Print calls Ruby script to format the output and prints it to the log
 func (printer *RubyPrinter) Print(snapshot map[string]int64) {
-	rhash, _ := printer.engine.VM.LoadString("{}")
+	printer.mu.Lock()
+	defer printer.mu.Unlock()
+
+	arenaIdx := printer.engine.VM.ArenaSave()
+
+	// It turned out that LoadString("{}") generates non-GC trash,
+	// while calling Hash.new doesn't
+	rhash, _ := printer.engine.VM.Class("Hash", nil).MrbValue(printer.engine.VM).Call("new")
 
 	hash := rhash.Hash()
 
@@ -50,4 +58,7 @@ func (printer *RubyPrinter) Print(snapshot map[string]int64) {
 	}
 
 	log.Info(result.String())
+
+	printer.engine.VM.ArenaRestore(arenaIdx)
+	printer.engine.VM.IncrementalGC()
 }
