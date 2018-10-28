@@ -1,3 +1,5 @@
+// +build darwin,mrb linux,mrb
+
 package rpc_cached
 
 import (
