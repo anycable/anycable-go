@@ -16,6 +16,9 @@ import (
 
 const (
 	metricsCacheHit = "rpc_cache_hit"
+
+	subscribeAction   = "subscribed"
+	unsubscribeAction = "unsubscribed"
 )
 
 // Identifier is used to extract channel id from message JSON
@@ -48,6 +51,29 @@ func NewController(config *config.Config, metrics *metrics.Metrics) *Controller 
 func (c *Controller) Start() (err error) {
 	err = c.rpc.Start()
 	c.cache, err = NewMCache(mrb.DefaultEngine())
+
+	// KILL ME!
+	c.cache.Put(
+		"BenchmarkChannel",
+		"broadcast",
+		`
+		def broadcast(data)
+			__broadcast__ "all", data
+			data["action"] = "broadcastResult"
+			transmit data
+		end
+		`,
+	)
+	c.cache.Put(
+		"BenchmarkChannel",
+		"subscribed",
+		`
+		def subscribed
+			stream_from "all"
+		end
+		`,
+	)
+
 	return
 }
 
@@ -62,12 +88,52 @@ func (c *Controller) Authenticate(path string, headers *map[string]string) (stri
 }
 
 // Subscribe performs Command RPC call with "subscribe" command
-func (c *Controller) Subscribe(sid string, id string, channel string) (*node.CommandResult, error) {
+func (c *Controller) Subscribe(sid string, id string, channel string) (res *node.CommandResult, err error) {
+	identifier := Identifier{}
+
+	err = json.Unmarshal([]byte(channel), &identifier)
+
+	if err != nil {
+		return
+	}
+
+	if maction := c.cache.Get(identifier.Channel, subscribeAction); maction != nil {
+		c.metrics.Counter(metricsCacheHit).Inc()
+		log.WithFields(
+			log.Fields{
+				"sid":     sid,
+				"context": "rpc",
+				"channel": identifier.Channel,
+				"action":  subscribeAction,
+			}).Debugf("cache hit")
+		return maction.Subscribe()
+	}
+
 	return c.rpc.Subscribe(sid, id, channel)
 }
 
 // Unsubscribe performs Command RPC call with "unsubscribe" command
-func (c *Controller) Unsubscribe(sid string, id string, channel string) (*node.CommandResult, error) {
+func (c *Controller) Unsubscribe(sid string, id string, channel string) (res *node.CommandResult, err error) {
+	identifier := Identifier{}
+
+	err = json.Unmarshal([]byte(channel), &identifier)
+
+	if err != nil {
+		return
+	}
+
+	if maction := c.cache.Get(identifier.Channel, unsubscribeAction); maction != nil {
+		c.metrics.Counter(metricsCacheHit).Inc()
+		log.WithFields(
+			log.Fields{
+				"sid":     sid,
+				"context": "rpc",
+				"channel": identifier.Channel,
+				"action":  unsubscribeAction,
+			}).Debugf("cache hit")
+		return maction.Unsubscribe()
+	}
+
 	return c.rpc.Unsubscribe(sid, id, channel)
 }
 

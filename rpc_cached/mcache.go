@@ -16,6 +16,7 @@ type MCallResult struct {
 	Streams        []string `mruby:"streams"`
 	StopAllStreams bool     `mruby:"stop_all_streams"`
 	Transmissions  []string `mruby:"transmissions"`
+	Broadcasts     []string `mruby:"broadcasts"`
 }
 
 // MCache is a cache of mruby compiled channels methods
@@ -32,20 +33,22 @@ func NewMCache(mengine *mrb.Engine) (*MCache, error) {
 	module AnyCable
 		class Channel
 			class Result
-				attr_reader :streams, :transmissions
+				attr_reader :streams, :transmissions, :broadcasts
 				attr_accessor :stop_all_streams
 
 				def initialize
-					@streams = []
-					@transmissions = []
 					@stop_all_streams = false
+					@transmissions = []
+					@streams = []
+					@broadcasts = []
 				end
 
 				def to_gomruby
 					{
+						stop_all_streams: stop_all_streams,
 						streams: streams,
 						transmissions: transmissions,
-						stop_all_streams: stop_all_streams
+						broadcasts: broadcasts
 					}
 				end
 			end
@@ -63,6 +66,23 @@ func NewMCache(mengine *mrb.Engine) (*MCache, error) {
 						channel.send(data.fetch('action'), data)
 					end.result
 				end
+
+				def subscribe
+					new.tap do |channel|
+						channel.result.transmissions << {
+							identifier: identifier,
+							type: "confirm_subscription"
+						}.to_json
+						channel.subscribed
+					end.result
+				end
+
+				def unsubscribe
+					new.tap do |channel|
+						channel.unsubscribed
+						channel.stop_all_streams
+					end.result
+				end
 			end
 
 			attr_reader :result
@@ -75,6 +95,21 @@ func NewMCache(mengine *mrb.Engine) (*MCache, error) {
 				result.transmissions << {
 					identifier: self.class.identifier,
 					message: data
+				}.to_json
+			end
+
+			def stream_from(stream)
+			  result.streams << stream
+			end
+
+			def stop_all_streams
+			  result.stop_all_streams = true
+			end
+
+			def __broadcast__(stream, data)
+			  result.broadcasts << {
+					stream: stream,
+					data: data.to_json
 				}.to_json
 			end
 		end
@@ -160,12 +195,32 @@ func NewMAction(cache *MCache, channel string, source string) (*MAction, error) 
 
 // Perform executes action within mruby
 func (m *MAction) Perform(data string) (*node.CommandResult, error) {
+	return m.exec(func() (v *mruby.MrbValue, err error) {
+		return m.compiled.Call("perform", mruby.String(data))
+	})
+}
+
+// Subscribe invokes "subscribed" action
+func (m *MAction) Subscribe() (*node.CommandResult, error) {
+	return m.exec(func() (v *mruby.MrbValue, err error) {
+		return m.compiled.Call("subscribe")
+	})
+}
+
+// Unubscribe invokes "unsubscribed" action
+func (m *MAction) Unsubscribe() (*node.CommandResult, error) {
+	return m.exec(func() (v *mruby.MrbValue, err error) {
+		return m.compiled.Call("unsubscribe")
+	})
+}
+
+func (m *MAction) exec(f func() (v *mruby.MrbValue, err error)) (res *node.CommandResult, err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	arenaIdx := m.cache.engine.VM.ArenaSave()
 
-	result, err := m.compiled.Call("perform", mruby.String(data))
+	result, err := f()
 
 	if err != nil {
 		return nil, err
@@ -183,10 +238,11 @@ func (m *MAction) Perform(data string) (*node.CommandResult, error) {
 		return nil, err
 	}
 
-	res := &node.CommandResult{
+	res = &node.CommandResult{
 		Transmissions:  decoded.Transmissions,
 		StopAllStreams: decoded.StopAllStreams,
 		Streams:        decoded.Streams,
+		Broadcasts:     decoded.Broadcasts,
 	}
 
 	return res, nil

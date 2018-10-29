@@ -24,7 +24,7 @@ func init() {
 	}
 }
 
-func TestMAction(t *testing.T) {
+func TestMActionGC(t *testing.T) {
 	maction, err := NewMAction(
 		cache,
 		"BenchmarkChannel",
@@ -57,4 +57,32 @@ func TestMAction(t *testing.T) {
 	assert.False(t, res.Disconnect)
 	assert.False(t, res.StopAllStreams)
 	assert.Equal(t, []string{"{\"identifier\":\"" + identifier + "\",\"message\":{\"response\":{\"action\":\"echo\",\"text\":\"hello\"}}}"}, res.Transmissions)
+}
+
+func TestMActionBroacast(t *testing.T) {
+	maction, err := NewMAction(
+		cache,
+		"BenchmarkChannel",
+		`
+		def broadcast(data)
+			__broadcast__ "all", data
+			data["action"] = "broadcastResult"
+			transmit data
+		end
+		`,
+	)
+
+	assert.Nil(t, err)
+
+	res, err := maction.Perform("{\"action\":\"broadcast\",\"text\":\"hello\"}")
+
+	assert.Nil(t, err)
+
+	identifier := "{\\\"channel\\\":\\\"BenchmarkChannel\\\"}"
+
+	assert.Empty(t, res.Streams)
+	assert.False(t, res.Disconnect)
+	assert.False(t, res.StopAllStreams)
+	assert.Equal(t, []string{"{\"stream\":\"all\",\"data\":\"{\\\"action\\\":\\\"broadcast\\\",\\\"text\\\":\\\"hello\\\"}\"}"}, res.Broadcasts)
+	assert.Equal(t, []string{"{\"identifier\":\"" + identifier + "\",\"message\":{\"action\":\"broadcastResult\",\"text\":\"hello\"}}"}, res.Transmissions)
 }

@@ -38,6 +38,7 @@ type CommandResult struct {
 	StopAllStreams bool
 	Transmissions  []string
 	Disconnect     bool
+	Broadcasts     []string
 }
 
 // Controller is an interface describing business-logic handler (e.g. RPC)
@@ -327,11 +328,21 @@ func (n *Node) handleCommandReply(s *Session, msg *Message, reply *CommandResult
 		n.hub.unsubscribe <- &SubscriptionInfo{session: s.UID, identifier: msg.Identifier}
 	}
 
-	for _, stream := range reply.Streams {
-		n.hub.subscribe <- &SubscriptionInfo{session: s.UID, stream: stream, identifier: msg.Identifier}
+	if reply.Streams != nil {
+		for _, stream := range reply.Streams {
+			n.hub.subscribe <- &SubscriptionInfo{session: s.UID, stream: stream, identifier: msg.Identifier}
+		}
 	}
 
-	transmit(s, reply.Transmissions)
+	if reply.Broadcasts != nil {
+		for _, broadcast := range reply.Broadcasts {
+			n.HandlePubsub([]byte(broadcast))
+		}
+	}
+
+	if reply.Transmissions != nil {
+		transmit(s, reply.Transmissions)
+	}
 }
 
 func (n *Node) collectStats() {
