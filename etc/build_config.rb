@@ -23,6 +23,9 @@ MRuby::Build.new do |conf|
 
   # include the default GEMs
   conf.gembox 'default'
+  conf.gem mgem: 'mruby-json'
+  conf.gem mgem: 'mruby-regexp-pcre'
+
   # C compiler settings
   # conf.cc do |cc|
   #   cc.command = ENV['CC'] || 'gcc'

@@ -254,6 +254,7 @@ func (c *Controller) parseCommandResponse(response interface{}, err error) (*nod
 			StopAllStreams: r.StopStreams,
 			Streams:        r.Streams,
 			Transmissions:  r.Transmissions,
+			Broadcasts:     []string{},
 		}
 
 		if r.Status.String() == "SUCCESS" {
