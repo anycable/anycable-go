@@ -1,11 +1,8 @@
 version: 2.1
 
-ruby_image: &ruby_image
-  docker:
-  - image: circleci/ruby:2.5.1-stretch
-
 github_release_requires: &github_release_requires
   requires:
+  - go_tests
   - anyt_test
   - build_darwin
   - build_darwin_mruby
@@ -13,7 +10,6 @@ github_release_requires: &github_release_requires
   - build_linux
   - build_linux_mruby
   - build_windows
-  - go_tests
 
 requires_prepared_code: &requires_prepared_code
   requires:
@@ -93,15 +89,33 @@ workflows:
             ignore: /.*/
 
 executors:
-  golang_stable:
+  golang:
     docker:
       - image: circleci/golang:1.11.4-stretch
     working_directory: /go/src/github.com/anycable/anycable-go/
+  osx:
+    macos:
+      xcode: "10.0.0"
+    environment:
+      GOPATH: /Users/distiller/go
+      GOARCH: amd64
+      CGO_ENABLED: "1"
+      GO_VERSION: 1.11.4
+      GO_SHA: cc2b872aa1341ebe37bf65b9008a1aff7715ff9bde8b6503fb12c94dfe31b145
+    working_directory: /Users/distiller/go/src/github.com/anycable/anycable-go/
+  docker:
+    docker:
+      - image: docker:18.06.0-ce
+    working_directory: /root/project/
+  ruby:
+    docker:
+      - image: circleci/ruby:2.5-stretch
+
 
 # Jobs definitions
 jobs:
   prepare_code:
-    executor: golang_stable
+    executor: golang
     steps:
     - attach_workspace:
         at: .
@@ -112,7 +126,7 @@ jobs:
         paths: .
 
   prepare_mruby:
-    <<: *ruby_image
+    executor: ruby
     steps:
     - attach_workspace:
         at: .
@@ -131,7 +145,7 @@ jobs:
         - ./vendor/github.com/mitchellh/go-mruby/libmruby.a
 
   go_tests:
-    executor: golang_stable
+    executor: golang
     steps:
     - attach_workspace:
         at: /go/src/github.com/anycable/anycable-go/
@@ -140,7 +154,7 @@ jobs:
     - run: make fmt
 
   build_binary_for_anyt_test:
-    executor: golang_stable
+    executor: golang
     environment:
       GOOS: linux
       GOARCH: amd64
@@ -156,27 +170,21 @@ jobs:
         paths: /tmp/anycable-go-test
 
   build_darwin_mruby:
-    macos:
-      xcode: "10.0.0"
-    environment:
-      GOPATH: /Users/distiller/go
-      GOARCH: amd64
-      CGO_ENABLED: "1"
-    working_directory: /Users/distiller/go/src/github.com/anycable/anycable-go/
+    executor: osx
     steps:
-    - run: mkdir -p /Users/distiller/go/src/github.com/anycable/anycable-go/
+    - run: mkdir -p ${GOPATH}/src/github.com/anycable/anycable-go/
     - checkout
     - run:
         name: Installing Golang
         command: |
-          curl -o go.pkg https://dl.google.com/go/go1.11.4.darwin-amd64.pkg && \
-          echo "cc2b872aa1341ebe37bf65b9008a1aff7715ff9bde8b6503fb12c94dfe31b145  go.pkg" | shasum -a 256 -c - && \
+          curl -o go.pkg https://dl.google.com/go/go${GO_VERSION}.darwin-amd64.pkg && \
+          echo "${GO_SHA}  go.pkg" | shasum -a 256 -c - && \
           sudo installer -pkg go.pkg -target /
     - run:
         name: Prepare code for the build
         command: |
           /usr/local/go/bin/go get -u github.com/golang/dep/cmd/dep && \
-          /Users/distiller/go/bin/dep ensure && \
+          ${GOPATH}/bin/dep ensure && \
           bash -c "(cd vendor/github.com/mitchellh/go-mruby && MRUBY_CONFIG=../../../../../../etc/build_config.rb make libmruby.a)"
     - run:
         name: Build Darwin amd64 binary (with mruby)
@@ -186,7 +194,7 @@ jobs:
         paths: /tmp/dist/
 
   build_linux:
-    executor: golang_stable
+    executor: golang
     environment:
       GOOS: linux
       CGO_ENABLED: "0"
@@ -203,14 +211,14 @@ jobs:
         name: Building Linux arm binary
         command: env GOARCH=arm go build -ldflags "-s -w -X main.version=$(git describe --tags)" -a -o "/tmp/dist/anycable-go-$(git describe --tags)-linux-arm" cmd/anycable-go/main.go
     - run:
-        name: Building Linux arm binary
+        name: Building Linux arm64 binary
         command: env GOARCH=arm64 go build -ldflags "-s -w -X main.version=$(git describe --tags)" -a -o "/tmp/dist/anycable-go-$(git describe --tags)-linux-arm64" cmd/anycable-go/main.go
     - save_cache:
         key: linux-nomruby-{{ .Revision }}
         paths: /tmp/dist/
 
   build_windows:
-    executor: golang_stable
+    executor: golang
     environment:
       GOOS: windows
       CGO_ENABLED: "0"
@@ -228,7 +236,7 @@ jobs:
         paths: /tmp/dist/
 
   build_darwin:
-    executor: golang_stable
+    executor: golang
     environment:
       GOOS: darwin
       CGO_ENABLED: "0"
@@ -246,7 +254,7 @@ jobs:
         paths: /tmp/dist/
 
   build_freebsd:
-    executor: golang_stable
+    executor: golang
     environment:
       GOOS: freebsd
       CGO_ENABLED: "0"
@@ -267,7 +275,7 @@ jobs:
         paths: /tmp/dist/
 
   build_linux_mruby:
-    executor: golang_stable
+    executor: golang
     environment:
       GOOS: linux
       GOARCH: amd64
@@ -301,9 +309,7 @@ jobs:
     - run: anyt -c "/tmp/anycable-go-test --headers=cookie,x-api-token --ssl_key=etc/ssl/server.key --ssl_cert=etc/ssl/server.crt --port=8443" --target-url="wss://localhost:8443/cable"
 
   build_docker:
-    docker:
-    - image: docker:18.06.0-ce
-    working_directory: /root/project/
+    executor: docker
     steps:
     - setup_remote_docker:
         version: 18.06.0-ce
@@ -327,9 +333,7 @@ jobs:
         command: docker push anycable/anycable-go:${CIRCLE_TAG}
 
   build_docker_mruby:
-    docker:
-    - image: docker:18.06.0-ce
-    working_directory: /root/project/
+    executor: docker
     steps:
     - setup_remote_docker:
         version: 18.06.0-ce
@@ -352,7 +356,7 @@ jobs:
         command: docker push anycable/anycable-go:${CIRCLE_TAG}-mrb
 
   github_release:
-    executor: golang_stable
+    executor: golang
     working_directory: /tmp/dist/
     steps:
     - restore_cache:
