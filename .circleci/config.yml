@@ -1,16 +1,5 @@
 version: 2.1
 
-github_release_requires: &github_release_requires
-  requires:
-  - go_tests
-  - anyt_test
-  - build_darwin
-  - build_darwin_mruby
-  - build_freebsd
-  - build_linux
-  - build_linux_mruby
-  - build_windows
-
 requires_prepared_code: &requires_prepared_code
   requires:
   - prepare_code
@@ -33,38 +22,29 @@ workflows:
     - prepare_mruby:
         <<: *requires_prepared_code
         <<: *common_tags_filter
-    - go_tests:
+    - test:
         <<: *common_tags_filter
         requires:
         - prepare_mruby
-    - build_binary_for_anyt_test:
+    - build_binary_for_conformance:
         <<: *requires_prepared_code
         <<: *common_tags_filter
-    - build_linux:
-        <<: *requires_prepared_code
-        <<: *common_tags_filter
-    - build_windows:
-        <<: *requires_prepared_code
-        <<: *common_tags_filter
-    - build_darwin:
-        <<: *requires_prepared_code
-        <<: *common_tags_filter
-    - build_freebsd:
+    - build:
         <<: *requires_prepared_code
         <<: *common_tags_filter
     - build_linux_mruby:
         <<: *common_tags_filter
         requires:
         - prepare_mruby
-    - anyt_test:
+    - conformance:
         <<: *common_tags_filter
         requires:
-        - build_binary_for_anyt_test
+        - build_binary_for_conformance
     - build_docker:
         requires:
-        - go_tests
-        - anyt_test
-        - build_linux
+        - test
+        - conformance
+        - build
         filters:
           tags:
             only: /^v.*/
@@ -72,8 +52,8 @@ workflows:
             ignore: /.*/
     - build_docker_mruby:
         requires:
-        - go_tests
-        - anyt_test
+        - test
+        - conformance
         - build_linux_mruby
         filters:
           tags:
@@ -81,7 +61,12 @@ workflows:
           branches:
             ignore: /.*/
     - github_release:
-        <<: *github_release_requires
+        requires:
+        - test
+        - conformance
+        - build
+        - build_linux_mruby
+        - build_darwin_mruby
         filters:
           tags:
             only: /^v[0-9]+\.[0-9]+\.[0-9]+((\-|\.)(preview|beta|rc)\d+)?$/
@@ -93,6 +78,8 @@ executors:
     docker:
       - image: circleci/golang:1.11.4-stretch
     working_directory: /go/src/github.com/anycable/anycable-go/
+    environment:
+      CGO_ENABLED: "0"
   osx:
     macos:
       xcode: "10.0.0"
@@ -111,6 +98,29 @@ executors:
     docker:
       - image: circleci/ruby:2.5-stretch
 
+commands:
+  build:
+    description: Build AnyCable Go binary
+    parameters:
+      os:
+        type: string
+      arch:
+        type: string
+      postfix:
+        type: string
+    steps:
+      - run: env GOOS=<< parameters.os >> GOARCH=<< parameters.arch >> go build -ldflags "-s -w -X main.version=$(git describe --tags)" -a -o "/tmp/dist/anycable-go-$(git describe --tags)-<< parameters.postfix >>" cmd/anycable-go/main.go
+  build-mruby:
+    description: Build AnyCable Go binary with mruby support
+    parameters:
+      os:
+        type: string
+      arch:
+        type: string
+      postfix:
+        type: string
+    steps:
+      - run: env GOOS=<< parameters.os >> GOARCH=<< parameters.arch >> go build -ldflags "-s -w -X main.version=$(git describe --tags)-mrb" -tags mrb -a -o "/tmp/dist/anycable-go-$(git describe --tags)-<< parameters.postfix >>" cmd/anycable-go/main.go
 
 # Jobs definitions
 jobs:
@@ -144,8 +154,10 @@ jobs:
         - ./vendor/github.com/mitchellh/go-mruby/vendor/
         - ./vendor/github.com/mitchellh/go-mruby/libmruby.a
 
-  go_tests:
+  test:
     executor: golang
+    environment:
+      CGO_ENABLED: "1"
     steps:
     - attach_workspace:
         at: /go/src/github.com/anycable/anycable-go/
@@ -153,12 +165,11 @@ jobs:
     - run: make vet
     - run: make fmt
 
-  build_binary_for_anyt_test:
+  build_binary_for_conformance:
     executor: golang
     environment:
       GOOS: linux
       GOARCH: amd64
-      CGO_ENABLED: "0"
     steps:
     - attach_workspace:
         at: /go/src/github.com/anycable/anycable-go/
@@ -166,7 +177,7 @@ jobs:
         name: Building Linux amd64 binary
         command: env GOARCH=amd64 go build -ldflags "-s -w -X main.version=$(git describe --tags)" -a -o "/tmp/anycable-go-test" cmd/anycable-go/main.go
     - save_cache:
-        key: binary-for-anyt-test-{{ .Revision }}
+        key: binary-for-conformance-{{ .Revision }}
         paths: /tmp/anycable-go-test
 
   build_darwin_mruby:
@@ -181,116 +192,91 @@ jobs:
           echo "${GO_SHA}  go.pkg" | shasum -a 256 -c - && \
           sudo installer -pkg go.pkg -target /
     - run:
+        name: Add Go binaries to PATH
+        command: echo 'export PATH="$GOPATH/bin:/usr/local/go/bin:$PATH"' >> $BASH_ENV
+    - run:
         name: Prepare code for the build
         command: |
-          /usr/local/go/bin/go get -u github.com/golang/dep/cmd/dep && \
-          ${GOPATH}/bin/dep ensure && \
+          go get -u github.com/golang/dep/cmd/dep && \
+          dep ensure && \
           bash -c "(cd vendor/github.com/mitchellh/go-mruby && MRUBY_CONFIG=../../../../../../etc/build_config.rb make libmruby.a)"
-    - run:
-        name: Build Darwin amd64 binary (with mruby)
-        command: /usr/local/go/bin/go build -ldflags "-s -w -X main.version=$(git describe --tags)-mrb" -tags mrb -o "/tmp/dist/anycable-go-$(git describe --tags)-mrb-dawrin-amd64" cmd/anycable-go/main.go
+    - build-mruby:
+        os: darwin
+        arch: amd64
+        postfix: mrb-dawrin-amd64
     - save_cache:
         key: darwin-mruby-{{ .Revision }}
         paths: /tmp/dist/
 
-  build_linux:
+  build:
     executor: golang
-    environment:
-      GOOS: linux
-      CGO_ENABLED: "0"
     steps:
     - attach_workspace:
         at: /go/src/github.com/anycable/anycable-go/
-    - run:
-        name: Building Linux i386 binary
-        command: env GOARCH=386 go build -ldflags "-s -w -X main.version=$(git describe --tags)" -a -o "/tmp/dist/anycable-go-$(git describe --tags)-linux-386" cmd/anycable-go/main.go
-    - run:
-        name: Building Linux amd64 binary
-        command: env GOARCH=amd64 go build -ldflags "-s -w -X main.version=$(git describe --tags)" -a -o "/tmp/dist/anycable-go-$(git describe --tags)-linux-amd64" cmd/anycable-go/main.go
-    - run:
-        name: Building Linux arm binary
-        command: env GOARCH=arm go build -ldflags "-s -w -X main.version=$(git describe --tags)" -a -o "/tmp/dist/anycable-go-$(git describe --tags)-linux-arm" cmd/anycable-go/main.go
-    - run:
-        name: Building Linux arm64 binary
-        command: env GOARCH=arm64 go build -ldflags "-s -w -X main.version=$(git describe --tags)" -a -o "/tmp/dist/anycable-go-$(git describe --tags)-linux-arm64" cmd/anycable-go/main.go
+    - build:
+        os: linux
+        arch: "386"
+        postfix: linux-386
+    - build:
+        os: linux
+        arch: amd64
+        postfix: linux-amd64
+    - build:
+        os: linux
+        arch: arm
+        postfix: linux-arm
+    - build:
+        os: linux
+        arch: arm64
+        postfix: linux-arm64
+    - build:
+        os: windows
+        arch: "386"
+        postfix: win-386
+    - build:
+        os: windows
+        arch: amd64
+        postfix: win-amd64
+    - build:
+        os: darwin
+        arch: "386"
+        postfix: darwin-386
+    - build:
+        os: darwin
+        arch: amd64
+        postfix: darwin-amd64
+    - build:
+        os: freebsd
+        arch: "386"
+        postfix: freebsd-386
+    - build:
+        os: freebsd
+        arch: amd64
+        postfix: freebsd-amd64
+    - build:
+        os: freebsd
+        arch: arm
+        postfix: freebsd-arm
     - save_cache:
-        key: linux-nomruby-{{ .Revision }}
-        paths: /tmp/dist/
-
-  build_windows:
-    executor: golang
-    environment:
-      GOOS: windows
-      CGO_ENABLED: "0"
-    steps:
-    - attach_workspace:
-        at: /go/src/github.com/anycable/anycable-go/
-    - run:
-        name: Building Windows i386 binary
-        command: env GOARCH=386 go build -ldflags "-s -w -X main.version=$(git describe --tags)" -a -o "/tmp/dist/anycable-go-$(git describe --tags)-win-386" cmd/anycable-go/main.go
-    - run:
-        name: Building Windows amd64 binary
-        command: env GOARCH=amd64 go build -ldflags "-s -w -X main.version=$(git describe --tags)" -a -o "/tmp/dist/anycable-go-$(git describe --tags)-win-amd64" cmd/anycable-go/main.go
-    - save_cache:
-        key: windows-{{ .Revision }}
-        paths: /tmp/dist/
-
-  build_darwin:
-    executor: golang
-    environment:
-      GOOS: darwin
-      CGO_ENABLED: "0"
-    steps:
-    - attach_workspace:
-        at: /go/src/github.com/anycable/anycable-go/
-    - run:
-        name: Building Darwin i386 binary
-        command: env GOARCH=386 go build -ldflags "-s -w -X main.version=$(git describe --tags)" -a -o "/tmp/dist/anycable-go-$(git describe --tags)-darwin-386" cmd/anycable-go/main.go
-    - run:
-        name: Building Darwin amd64 binary
-        command: env GOARCH=amd64 go build -ldflags "-s -w -X main.version=$(git describe --tags)" -a -o "/tmp/dist/anycable-go-$(git describe --tags)-darwin-amd64" cmd/anycable-go/main.go
-    - save_cache:
-        key: darwin-nomruby-{{ .Revision }}
-        paths: /tmp/dist/
-
-  build_freebsd:
-    executor: golang
-    environment:
-      GOOS: freebsd
-      CGO_ENABLED: "0"
-    steps:
-    - attach_workspace:
-        at: /go/src/github.com/anycable/anycable-go/
-    - run:
-        name: Building FreeBSD i386 binary
-        command: env GOARCH=386 go build -ldflags "-s -w -X main.version=$(git describe --tags)" -a -o "/tmp/dist/anycable-go-$(git describe --tags)-freebsd-386" cmd/anycable-go/main.go
-    - run:
-        name: Building FreeBSD amd64 binary
-        command: env GOARCH=amd64 go build -ldflags "-s -w -X main.version=$(git describe --tags)" -a -o "/tmp/dist/anycable-go-$(git describe --tags)-freebsd-amd64" cmd/anycable-go/main.go
-    - run:
-        name: Building FreeBSD arm binary
-        command: env GOARCH=arm go build -ldflags "-s -w -X main.version=$(git describe --tags)" -a -o "/tmp/dist/anycable-go-$(git describe --tags)-freebsd-arm" cmd/anycable-go/main.go
-    - save_cache:
-        key: freebsd-{{ .Revision }}
+        key: build-{{ .Revision }}
         paths: /tmp/dist/
 
   build_linux_mruby:
     executor: golang
     environment:
-      GOOS: linux
-      GOARCH: amd64
       CGO_ENABLED: "1"
     steps:
     - attach_workspace:
         at: /go/src/github.com/anycable/anycable-go/
-    - run:
-        name: Building Linux amd64 binary
-        command: env go build -ldflags "-s -w -X main.version=$(git describe --tags)" -tags mrb -a -o "/tmp/dist/anycable-go-$(git describe --tags)-mrb-linux-amd64" cmd/anycable-go/main.go
+    - build-mruby:
+        os: linux
+        arch: amd64
+        postfix: mrb-linux-amd64
     - save_cache:
         key: linux-mruby-{{ .Revision }}
         paths: /tmp/dist/
 
-  anyt_test:
+  conformance:
     docker:
     - image: circleci/ruby:2.5.1-stretch
     - image: circleci/redis:4.0.11-alpine3.8
@@ -298,7 +284,7 @@ jobs:
     - attach_workspace:
         at: .
     - restore_cache:
-        key: binary-for-anyt-test-{{ .Revision }}
+        key: binary-for-conformance-{{ .Revision }}
     - run:
         name: Install gem anyt (conformance testing tool)
         command: gem install anyt
@@ -316,7 +302,7 @@ jobs:
     - attach_workspace:
         at: .
     - restore_cache:
-        key: linux-nomruby-{{ .Revision }}
+        key: build-{{ .Revision }}
     - run:
         name: Prepare files for Docker build
         command: |
@@ -362,15 +348,9 @@ jobs:
     - restore_cache:
         key: darwin-mruby-{{ .Revision }}
     - restore_cache:
-        key: darwin-nomruby-{{ .Revision }}
-    - restore_cache:
         key: linux-mruby-{{ .Revision }}
     - restore_cache:
-        key: linux-nomruby-{{ .Revision }}
-    - restore_cache:
-        key: freebsd-{{ .Revision }}
-    - restore_cache:
-        key: windows-{{ .Revision }}
+        key: build-{{ .Revision }}
     - run:
         name: Generate SHA256 checksums
         command: sha256sum anycable-go-* > SHA256SUM
