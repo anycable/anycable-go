@@ -1,9 +1,4 @@
-version: 2
-
-# YAML Templates
-golang_image: &golang_image
-  docker:
-  - image: circleci/golang:1.10.3-stretch
+version: 2.1
 
 ruby_image: &ruby_image
   docker:
@@ -97,11 +92,16 @@ workflows:
           branches:
             ignore: /.*/
 
+executors:
+  golang_stable:
+    docker:
+      - image: circleci/golang:1.11.4-stretch
+    working_directory: /go/src/github.com/anycable/anycable-go/
+
 # Jobs definitions
 jobs:
   prepare_code:
-    <<: *golang_image
-    working_directory: /go/src/github.com/anycable/anycable-go/
+    executor: golang_stable
     steps:
     - attach_workspace:
         at: .
@@ -131,8 +131,7 @@ jobs:
         - ./vendor/github.com/mitchellh/go-mruby/libmruby.a
 
   go_tests:
-    <<: *golang_image
-    working_directory: /go/src/github.com/anycable/anycable-go/
+    executor: golang_stable
     steps:
     - attach_workspace:
         at: /go/src/github.com/anycable/anycable-go/
@@ -141,8 +140,7 @@ jobs:
     - run: make fmt
 
   build_binary_for_anyt_test:
-    <<: *golang_image
-    working_directory: /go/src/github.com/anycable/anycable-go/
+    executor: golang_stable
     environment:
       GOOS: linux
       GOARCH: amd64
@@ -171,8 +169,8 @@ jobs:
     - run:
         name: Installing Golang
         command: |
-          curl -o go.pkg https://dl.google.com/go/go1.10.3.darwin-amd64.pkg && \
-          echo "6ea2b88dd10fa7efe4c68fcf990162475020fdb1789e0fa03b470fbddc1600c4  go.pkg" | shasum -a 256 -c - && \
+          curl -o go.pkg https://dl.google.com/go/go1.11.4.darwin-amd64.pkg && \
+          echo "cc2b872aa1341ebe37bf65b9008a1aff7715ff9bde8b6503fb12c94dfe31b145  go.pkg" | shasum -a 256 -c - && \
           sudo installer -pkg go.pkg -target /
     - run:
         name: Prepare code for the build
@@ -188,8 +186,7 @@ jobs:
         paths: /tmp/dist/
 
   build_linux:
-    <<: *golang_image
-    working_directory: /go/src/github.com/anycable/anycable-go/
+    executor: golang_stable
     environment:
       GOOS: linux
       CGO_ENABLED: "0"
@@ -213,8 +210,7 @@ jobs:
         paths: /tmp/dist/
 
   build_windows:
-    <<: *golang_image
-    working_directory: /go/src/github.com/anycable/anycable-go/
+    executor: golang_stable
     environment:
       GOOS: windows
       CGO_ENABLED: "0"
@@ -232,8 +228,7 @@ jobs:
         paths: /tmp/dist/
 
   build_darwin:
-    <<: *golang_image
-    working_directory: /go/src/github.com/anycable/anycable-go/
+    executor: golang_stable
     environment:
       GOOS: darwin
       CGO_ENABLED: "0"
@@ -251,8 +246,7 @@ jobs:
         paths: /tmp/dist/
 
   build_freebsd:
-    <<: *golang_image
-    working_directory: /go/src/github.com/anycable/anycable-go/
+    executor: golang_stable
     environment:
       GOOS: freebsd
       CGO_ENABLED: "0"
@@ -273,8 +267,7 @@ jobs:
         paths: /tmp/dist/
 
   build_linux_mruby:
-    <<: *golang_image
-    working_directory: /go/src/github.com/anycable/anycable-go/
+    executor: golang_stable
     environment:
       GOOS: linux
       GOARCH: amd64
@@ -359,7 +352,7 @@ jobs:
         command: docker push anycable/anycable-go:${CIRCLE_TAG}-mrb
 
   github_release:
-    <<: *golang_image
+    executor: golang_stable
     working_directory: /tmp/dist/
     steps:
     - restore_cache:
