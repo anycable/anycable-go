@@ -1,0 +1,40 @@
+version: '3.4'
+services:
+  app: &app
+    image: anycable-go:0.6-development
+    build:
+      context: .
+      dockerfile: Dockerfile.development
+      args:
+        ruby: 2.5
+        golang: 1.11.5
+    environment:
+      ANYCABLE_HOST: 0.0.0.0
+      ANYCABLE_PORT: 8080
+      ANYCABLE_REDIS_URL: redis://redis:6379/5
+      ANYCABLE_DEBUG: 1
+      ANYCABLE_METRICS_HTTP: /metrics
+    volumes:
+      - .:/go/src/github.com/anycable/anycable-go
+      - dist:/app/dist
+    depends_on:
+      - redis
+  runner:
+    <<: *app
+  ws:
+    <<: *app
+    command: make run
+  redis:
+    image: redis:4-alpine
+    volumes:
+      - redis:/data
+    ports:
+      - 6379
+
+volumes:
+  redis:
+  dist:
+
+networks:
+  anycable:
+    external: true

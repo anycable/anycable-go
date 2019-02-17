@@ -1,0 +1,30 @@
+ARG ruby
+FROM ruby:$ruby-stretch
+
+# Golang
+ARG golang
+RUN wget -O go.tgz https://dl.google.com/go/go$golang.linux-amd64.tar.gz; \
+    tar -C /usr/local -xzf go.tgz; \
+    rm go.tgz; \
+    export PATH="/usr/local/go/bin:$PATH"; \
+    go version
+
+ENV GOPATH /go
+ENV PATH $GOPATH/bin:/usr/local/go/bin:$PATH
+
+RUN mkdir -p "$GOPATH/src" "$GOPATH/bin" && chmod -R 777 "$GOPATH"
+
+# Ruby and mruby deps
+RUN gem update --system && gem install bundler
+RUN apt update && \
+    apt -y upgrade && \
+    apt -y install bison
+
+# Application
+ENV APP ${GOPATH}/src/github.com/anycable/anycable-go
+COPY Makefile ${APP}/
+WORKDIR ${APP}
+
+RUN make prepare
+
+CMD "/bin/bash"
