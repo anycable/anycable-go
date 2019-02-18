@@ -5,7 +5,7 @@ import (
 
 	"github.com/anycable/anycable-go/node"
 	"github.com/apex/log"
-	"github.com/gorilla/websocket"
+	"github.com/fasthttp/websocket"
 )
 
 // WebsocketHandler called when new client connection comes to websocket endpoint.

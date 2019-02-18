@@ -21,6 +21,14 @@
   revision = "ecdeabc65495df2dec95d7c4a4c3e021903035e5"
 
 [[projects]]
+  digest = "1:43d55b7e7bd055bd957cde5bc7ec1a007a5db38028beca75753b8bb4738800f6"
+  name = "github.com/fasthttp/websocket"
+  packages = ["."]
+  pruneopts = ""
+  revision = "cefc411b142525c927e2656b34a08f15a37da650"
+  version = "v1.4.0"
+
+[[projects]]
   digest = "1:bcb38c8fc9b21bb8682ce2d605a7d4aeb618abc7f827e3ac0b27c0371fdb23fb"
   name = "github.com/golang/protobuf"
   packages = [
@@ -46,11 +54,23 @@
   version = "v2.0.0"
 
 [[projects]]
-  digest = "1:64d212c703a2b94054be0ce470303286b177ad260b2f89a307e3d1bb6c073ef6"
-  name = "github.com/gorilla/websocket"
+  digest = "1:064eb4d2277fb6a23944380644268b99acc0ae0576c72d0b6d7288d3c2fe4a1e"
+  name = "github.com/klauspost/compress"
+  packages = [
+    "flate",
+    "gzip",
+    "zlib",
+  ]
+  pruneopts = ""
+  revision = "30be6041bed523c18e269a700ebd9c2ea9328574"
+  version = "v1.4.1"
+
+[[projects]]
+  digest = "1:198af4ad42013a3779477b597458f860a6a99e57e1674fa4f61eb04b8b5b768f"
+  name = "github.com/klauspost/cpuid"
   packages = ["."]
   pruneopts = ""
-  revision = "ea4d1f681babbce9545c9c5f3d5194a789c89f5b"
+  revision = "e7e905edc00ea8827e58662220139109efea09db"
   version = "v1.2.0"
 
 [[projects]]
@@ -114,6 +134,26 @@
   packages = ["."]
   pruneopts = ""
   revision = "49bbbdf5eb8fb57a46fd63b6e7cb9b3d1b3f876a"
+
+[[projects]]
+  branch = "master"
+  digest = "1:d672360021f8f81b6d76c6db6ca792a616b774a7bd0df1b2df5a63c27900f718"
+  name = "github.com/valyala/bytebufferpool"
+  packages = ["."]
+  pruneopts = ""
+  revision = "cdfbe9377474227bb42120c1e22fd4433e7f69bf"
+
+[[projects]]
+  branch = "master"
+  digest = "1:219e317c23b7d80441d0aabd222f0993379350966ffe14b3a0cee957f7802cee"
+  name = "github.com/valyala/fasthttp"
+  packages = [
+    ".",
+    "fasthttputil",
+    "stackless",
+  ]
+  pruneopts = ""
+  revision = "ed3793a1e1602989ba50bd20823e8521a4da84af"
 
 [[projects]]
   digest = "1:18b2d59fab74b4110c5d1883e49f0effbc62a49556d51337b6761aa5585a17c7"
@@ -206,9 +246,9 @@
   input-imports = [
     "github.com/apex/log",
     "github.com/apex/log/handlers/json",
+    "github.com/fasthttp/websocket",
     "github.com/golang/protobuf/proto",
     "github.com/gomodule/redigo/redis",
-    "github.com/gorilla/websocket",
     "github.com/matoous/go-nanoid",
     "github.com/mattn/go-isatty",
     "github.com/mitchellh/go-mruby",

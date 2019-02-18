@@ -9,7 +9,7 @@ import (
 
 	"github.com/anycable/anycable-go/utils"
 	"github.com/apex/log"
-	"github.com/gorilla/websocket"
+	"github.com/fasthttp/websocket"
 	nanoid "github.com/matoous/go-nanoid"
 )
 
