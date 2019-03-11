@@ -183,7 +183,7 @@ func (s *Session) ReadMessages() {
 		_, message, err := s.ws.ReadMessage()
 
 		if err != nil {
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway) {
+			if !websocket.IsCloseError(err, websocket.CloseGoingAway) {
 				s.Log.Debugf("Websocket read error: %v", err)
 			}
 			break
