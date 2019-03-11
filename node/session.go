@@ -31,6 +31,14 @@ const (
 	pingInterval   = 3 * time.Second
 )
 
+var (
+	expectedCloseStatuses = []int{
+		websocket.CloseNormalClosure,    // Reserved in case ActionCable fixes its behaviour
+		websocket.CloseGoingAway,        // Web browser page was closed
+		websocket.CloseNoStatusReceived, // ActionCable don't care about closing
+	}
+)
+
 // Session represents active client
 type Session struct {
 	node          *Node
@@ -181,7 +189,7 @@ func (s *Session) ReadMessages() {
 		_, message, err := s.ws.ReadMessage()
 
 		if err != nil {
-			if websocket.IsCloseError(err, websocket.CloseGoingAway) {
+			if websocket.IsCloseError(err, expectedCloseStatuses...) {
 				s.Log.Debugf("Websocket closed: %v", err)
 				s.Disconnect("Read closed", CloseNormalClosure)
 			} else {
