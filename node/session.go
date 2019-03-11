@@ -177,14 +177,16 @@ func (s *Session) Send(msg []byte) {
 func (s *Session) ReadMessages() {
 	s.ws.SetReadLimit(maxMessageSize)
 
-	defer s.Disconnect("", CloseAbnormalClosure)
-
 	for {
 		_, message, err := s.ws.ReadMessage()
 
 		if err != nil {
-			if !websocket.IsCloseError(err, websocket.CloseGoingAway) {
-				s.Log.Debugf("Websocket read error: %v", err)
+			if websocket.IsCloseError(err, websocket.CloseGoingAway) {
+				s.Log.Debugf("Websocket closed: %v", err)
+				s.Disconnect("Read closed", CloseNormalClosure)
+			} else {
+				s.Log.Debugf("Websocket close error: %v", err)
+				s.Disconnect("Read failed", CloseAbnormalClosure)
 			}
 			break
 		}
