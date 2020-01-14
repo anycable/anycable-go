@@ -5,7 +5,7 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/anycable/anycable-go/config"
+	"github.com/anycable/anycable-go/common"
 	"github.com/anycable/anycable-go/metrics"
 	"github.com/apex/log"
 )
@@ -30,56 +30,38 @@ const (
 	metricsUnknownBroadcast = "failed_broadcast_msg_total"
 )
 
-// CommandResult is a result of performing controller action,
-// which contains informations about streams to subscribe,
-// messages to sent
-type CommandResult struct {
-	Streams        []string
-	StopAllStreams bool
-	Transmissions  []string
-	Disconnect     bool
-	Broadcasts     []*StreamMessage
-}
-
 // Controller is an interface describing business-logic handler (e.g. RPC)
 type Controller interface {
 	Shutdown() error
 	Authenticate(sid string, path string, headers *map[string]string) (string, []string, error)
-	Subscribe(sid string, id string, channel string) (*CommandResult, error)
-	Unsubscribe(sid string, id string, channel string) (*CommandResult, error)
-	Perform(sid string, id string, channel string, data string) (*CommandResult, error)
+	Subscribe(sid string, id string, channel string) (*common.CommandResult, error)
+	Unsubscribe(sid string, id string, channel string) (*common.CommandResult, error)
+	Perform(sid string, id string, channel string, data string) (*common.CommandResult, error)
 	Disconnect(sid string, id string, subscriptions []string, path string, headers *map[string]string) error
 }
 
-// Message represents incoming client message
-type Message struct {
-	Command    string `json:"command"`
-	Identifier string `json:"identifier"`
-	Data       string `json:"data"`
-}
-
-// StreamMessage represents a message to be sent to stream
-type StreamMessage struct {
-	Stream string `json:"stream"`
-	Data   string `json:"data"`
+// Disconnector is an interface for disconnect queue implementation
+type Disconnector interface {
+	Run() error
+	Shutdown() error
+	Enqueue(*Session) error
+	Size() int
 }
 
 // Node represents the whole application
 type Node struct {
-	Config  *config.Config
 	Metrics *metrics.Metrics
 
 	hub          *Hub
 	controller   Controller
-	disconnector *DisconnectQueue
+	disconnector Disconnector
 	shutdownCh   chan struct{}
 	log          *log.Entry
 }
 
 // NewNode builds new node struct
-func NewNode(config *config.Config, controller Controller, metrics *metrics.Metrics) *Node {
+func NewNode(controller Controller, metrics *metrics.Metrics) *Node {
 	node := &Node{
-		Config:     config,
 		Metrics:    metrics,
 		controller: controller,
 		shutdownCh: make(chan struct{}),
@@ -90,20 +72,21 @@ func NewNode(config *config.Config, controller Controller, metrics *metrics.Metr
 
 	go node.hub.Run()
 
-	node.disconnector = NewDisconnectQueue(node, config.DisconnectRate)
-
-	go node.disconnector.Run()
-
 	node.registerMetrics()
 	go node.collectStats()
 
 	return node
 }
 
+// SetDisconnector set disconnector for the node
+func (n *Node) SetDisconnector(d Disconnector) {
+	n.disconnector = d
+}
+
 // HandleCommand parses incoming message from client and
 // execute the command (if recognized)
 func (n *Node) HandleCommand(s *Session, raw []byte) {
-	msg := &Message{}
+	msg := &common.Message{}
 
 	n.Metrics.Counter(metricsReceivedMsg).Inc()
 
@@ -128,7 +111,7 @@ func (n *Node) HandleCommand(s *Session, raw []byte) {
 
 // HandlePubsub parses incoming pubsub message and broadcast it
 func (n *Node) HandlePubsub(raw []byte) {
-	msg := &StreamMessage{}
+	msg := &common.StreamMessage{}
 
 	if err := json.Unmarshal(raw, &msg); err != nil {
 		n.Metrics.Counter(metricsUnknownBroadcast).Inc()
@@ -198,7 +181,7 @@ func (n *Node) Authenticate(s *Session, path string, headers *map[string]string)
 }
 
 // Subscribe subscribes session to a channel
-func (n *Node) Subscribe(s *Session, msg *Message) {
+func (n *Node) Subscribe(s *Session, msg *common.Message) {
 	s.mu.Lock()
 
 	if _, ok := s.subscriptions[msg.Identifier]; ok {
@@ -224,7 +207,7 @@ func (n *Node) Subscribe(s *Session, msg *Message) {
 }
 
 // Unsubscribe unsubscribes session from a channel
-func (n *Node) Unsubscribe(s *Session, msg *Message) {
+func (n *Node) Unsubscribe(s *Session, msg *common.Message) {
 	s.mu.Lock()
 
 	if _, ok := s.subscriptions[msg.Identifier]; !ok {
@@ -254,7 +237,7 @@ func (n *Node) Unsubscribe(s *Session, msg *Message) {
 }
 
 // Perform executes client command
-func (n *Node) Perform(s *Session, msg *Message) {
+func (n *Node) Perform(s *Session, msg *common.Message) {
 	s.mu.Lock()
 
 	if _, ok := s.subscriptions[msg.Identifier]; !ok {
@@ -279,16 +262,16 @@ func (n *Node) Perform(s *Session, msg *Message) {
 }
 
 // Broadcast message to stream
-func (n *Node) Broadcast(msg *StreamMessage) {
+func (n *Node) Broadcast(msg *common.StreamMessage) {
 	n.Metrics.Counter(metricsBroadcastMsg).Inc()
 	n.log.Debugf("Incoming pubsub message: %v", msg)
 	n.hub.broadcast <- msg
 }
 
 // Disconnect adds session to disconnector queue and unregister session from hub
-func (n *Node) Disconnect(s *Session) {
+func (n *Node) Disconnect(s *Session) error {
 	n.hub.unregister <- s
-	n.disconnector.Enqueue(s)
+	return n.disconnector.Enqueue(s)
 }
 
 // DisconnectNow execute disconnect on controller
@@ -318,7 +301,7 @@ func transmit(s *Session, transmissions []string) {
 	}
 }
 
-func (n *Node) handleCommandReply(s *Session, msg *Message, reply *CommandResult) {
+func (n *Node) handleCommandReply(s *Session, msg *common.Message, reply *common.CommandResult) {
 	if reply.Disconnect {
 		defer s.Disconnect("Command Failed", CloseAbnormalClosure)
 	}

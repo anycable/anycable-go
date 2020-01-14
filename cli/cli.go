@@ -20,10 +20,6 @@ var (
 	fs          *flag.FlagSet
 )
 
-const (
-	deprecatedHost = "0.0.0.0|deprecated"
-)
-
 func init() {
 	// Configure namespaced flagSet with errorHandling set to ExitOnError (=1)
 	fs = flag.NewFlagSetWithEnvPrefix(os.Args[0], "ANYCABLE", 1)
@@ -48,7 +44,7 @@ func init() {
 	}
 
 	// Config vars
-	fs.StringVar(&defaults.Host, "host", deprecatedHost, "")
+	fs.StringVar(&defaults.Host, "host", "localhost", "")
 	fs.IntVar(&defaults.Port, "port", portDefault, "")
 	fs.StringVar(&defaults.Path, "path", "/cable", "")
 	fs.StringVar(&defaults.HealthPath, "health-path", "/health", "")
@@ -59,21 +55,24 @@ func init() {
 	fs.StringVar(&defaults.RedisURL, "redis_url", redisDefault, "")
 	fs.StringVar(&defaults.RedisChannel, "redis_channel", "__anycable__", "")
 
-	fs.StringVar(&defaults.RPCHost, "rpc_host", "localhost:50051", "")
+	fs.StringVar(&defaults.RPC.Host, "rpc_host", "localhost:50051", "")
 	fs.StringVar(&headers, "headers", "cookie", "")
 	fs.IntVar(&defaults.DisconnectRate, "disconnect_rate", 100, "")
-	fs.Int64Var(&defaults.MaxMessageSize, "max_message_size", 65536, "")
+	fs.IntVar(&defaults.WS.ReadBufferSize, "read_buffer_size", 1024, "")
+	fs.IntVar(&defaults.WS.WriteBufferSize, "write_buffer_size", 1024, "")
+	fs.Int64Var(&defaults.WS.MaxMessageSize, "max_message_size", 65536, "")
+	fs.BoolVar(&defaults.WS.EnableCompression, "enable_ws_compression", false, "")
 
 	fs.StringVar(&defaults.LogLevel, "log_level", "info", "")
 	fs.StringVar(&defaults.LogFormat, "log_format", "text", "")
 	fs.BoolVar(&debugMode, "debug", false, "")
 
-	fs.BoolVar(&defaults.MetricsLog, "metrics_log", false, "")
-	fs.IntVar(&defaults.MetricsLogInterval, "metrics_log_interval", 15, "")
-	fs.StringVar(&defaults.MetricsLogFormatter, "metrics_log_formatter", "", "")
-	fs.StringVar(&defaults.MetricsHTTP, "metrics_http", "", "")
-	fs.StringVar(&defaults.MetricsHost, "metrics_host", "", "")
-	fs.IntVar(&defaults.MetricsPort, "metrics_port", 0, "")
+	fs.BoolVar(&defaults.Metrics.Log, "metrics_log", false, "")
+	fs.IntVar(&defaults.Metrics.LogInterval, "metrics_log_interval", 15, "")
+	fs.StringVar(&defaults.Metrics.LogFormatter, "metrics_log_formatter", "", "")
+	fs.StringVar(&defaults.Metrics.HTTP, "metrics_http", "", "")
+	fs.StringVar(&defaults.Metrics.Host, "metrics_host", "", "")
+	fs.IntVar(&defaults.Metrics.Port, "metrics_port", 0, "")
 
 	// CLI vars
 	fs.BoolVar(&showHelp, "h", false, "")
@@ -109,7 +108,7 @@ USAGE
   anycable-go [options]
 
 OPTIONS
-  --host                   Server host, default: 0.0.0.0 (deprecated, will be changed to "localhost"), env: ANYCABLE_HOST
+  --host                   Server host, default: localhost, env: ANYCABLE_HOST
   --port                   Server port, default: 8080, env: ANYCABLE_PORT, PORT
   --path                   WebSocket endpoint path, default: /cable, env: ANYCABLE_PATH
   --health-path            HTTP health endpoint path, default: /health, env: ANYCABLE_HEALTH_PATH
@@ -123,7 +122,6 @@ OPTIONS
   --rpc_host               RPC service address, default: localhost:50051, env: ANYCABLE_RPC_HOST
   --headers                List of headers to proxy to RPC, default: cookie, env: ANYCABLE_HEADERS
   --disconnect_rate        Max number of Disconnect calls per second, default: 100, env: ANYCABLE_DISCONNECT_RATE
-  --max_message_size       Maximum size of a message in bytes, default: 65536, env: ANYCABLE_MAX_MESSAGE_SIZE
 
   --log_level              Set logging level (debug/info/warn/error/fatal), default: info, env: ANYCABLE_LOG_LEVEL
   --log_format             Set logging format (text, json), default: text, env: ANYCABLE_LOG_FORMAT
@@ -136,6 +134,11 @@ OPTIONS
   --metrics_host           Server host for metrics endpoint, default: the same as for main server, env: ANYCABLE_METRICS_HOST
   --metrics_port           Server port for metrics endpoint, default: the same as for main server, env: ANYCABLE_METRICS_PORT
 
+  --read_buffer_size       WebSocket connection read buffer size, default: 1024, env: ANYCABLE_READ_BUFFER_SIZE
+  --write_buffer_size      WebSocket connection write buffer size, default: 1024, env: ANYCABLE_WRITE_BUFFER_SIZE
+  --max_message_size       Maximum size of a message in bytes, default: 65536, env: ANYCABLE_MAX_MESSAGE_SIZE
+  --enable_ws_compression  Enable experimental WebSocket per message compression, default: false, env: ANYCABLE_ENABLE_WS_COMPRESSION
+
   -h                       This help screen
   -v                       Show version
 
@@ -147,16 +150,6 @@ func PrintHelp() {
 }
 
 func prepareComplexDefaults() {
-	if defaults.Host == deprecatedHost {
-		fmt.Println(
-			`DEPRECATION WARNING: You're using default host configuration which starts AnyCable-Go
-server on all available interfaces including external ones. This is about to be changed
-to loopback interface only in future versions. Please, consider switching to "localhost"
-or set "0.0.0.0" explicitly in your configuration, if you want to continue with
-the current behavior and supress this message.`)
-
-		defaults.Host = "0.0.0.0"
-	}
 	defaults.Headers = parseHeaders(headers)
 
 	if debugMode {
@@ -164,8 +157,8 @@ the current behavior and supress this message.`)
 		defaults.LogFormat = "text"
 	}
 
-	if defaults.MetricsPort == 0 {
-		defaults.MetricsPort = defaults.Port
+	if defaults.Metrics.Port == 0 {
+		defaults.Metrics.Port = defaults.Port
 	}
 }
 
