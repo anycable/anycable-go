@@ -3,6 +3,7 @@ package server
 import (
 	"net/http"
 
+	"github.com/anycable/anycable-go/common"
 	"github.com/anycable/anycable-go/node"
 	"github.com/anycable/anycable-go/utils"
 	"github.com/apex/log"
@@ -41,14 +42,15 @@ func WebsocketHandler(app *node.Node, fetchHeaders []string, config *WSConfig) h
 			return
 		}
 
-		path := r.URL.String()
-		headers := utils.FetchHeaders(r, fetchHeaders)
-
 		uid, err := utils.FetchUID(r)
 		if err != nil {
 			utils.CloseWS(ws, websocket.CloseAbnormalClosure, "UID Retrieval Error")
 			return
 		}
+
+		env := common.SessionEnvFromRequest(r)
+		fetchedHeaders := utils.FetchHeaders(r, fetchHeaders)
+		env.Headers = &fetchedHeaders
 
 		ws.SetReadLimit(config.MaxMessageSize)
 
@@ -58,7 +60,7 @@ func WebsocketHandler(app *node.Node, fetchHeaders []string, config *WSConfig) h
 
 		// Separate goroutine for better GC of caller's data.
 		go func() {
-			session, err := node.NewSession(app, ws, path, headers, uid)
+			session, err := node.NewSession(app, ws, uid, env)
 
 			if err != nil {
 				ctx.Debugf("Websocket session initialization failed: %v", err)

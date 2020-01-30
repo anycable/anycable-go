@@ -23,6 +23,7 @@ func FetchHeaders(r *http.Request, list []string) map[string]string {
 	for _, header := range list {
 		res[header] = r.Header.Get(header)
 	}
+	// Deprecated, to be removed in v1.1 in favor of env.RemoteAddr
 	res[remoteAddrHeader], _, _ = net.SplitHostPort(r.RemoteAddr)
 	return res
 }

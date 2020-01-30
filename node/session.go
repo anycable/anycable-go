@@ -69,18 +69,17 @@ func (p *pingMessage) toJSON() []byte {
 }
 
 // NewSession build a new Session struct from ws connetion and http request
-func NewSession(node *Node, ws *websocket.Conn, path string, headers map[string]string, uid string) (*Session, error) {
+func NewSession(node *Node, ws *websocket.Conn, uid string, env *common.SessionEnv) (*Session, error) {
 	session := &Session{
+		UID:           uid,
 		node:          node,
 		ws:            ws,
-		env:           &common.SessionEnv{Path: path, Headers: &headers},
+		env:           env,
 		subscriptions: make(map[string]bool),
 		send:          make(chan []byte, 256),
 		closed:        false,
 		connected:     false,
 	}
-
-	session.UID = uid
 
 	ctx := node.log.WithFields(log.Fields{
 		"sid": session.UID,

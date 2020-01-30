@@ -1,11 +1,43 @@
 // Package common contains struts and interfaces shared between multiple components
 package common
 
+import (
+	"net"
+	"net/http"
+)
+
 // SessionEnv represents the underlying HTTP connection data:
-// URL path and request headers
+// URL parts and request headers
 type SessionEnv struct {
-	Path    string
-	Headers *map[string]string
+	// Deprecated, to be removed in v1.1
+	URL        string
+	Path       string
+	Query      string
+	Host       string
+	Port       string
+	Scheme     string
+	Origin     string
+	RemoteAddr string
+	Cookies    string
+	Headers    *map[string]string
+}
+
+// SessionEnvFromRequest builds a SessionEnv struct from the http request and the list of required
+// headers
+func SessionEnvFromRequest(req *http.Request) *SessionEnv {
+	remoteAddr, _, _ := net.SplitHostPort(req.RemoteAddr)
+
+	return &SessionEnv{
+		URL:        req.URL.String(),
+		Path:       req.URL.Path,
+		Query:      req.URL.RawQuery,
+		Host:       req.URL.Hostname(),
+		Port:       req.URL.Port(),
+		Origin:     req.Header.Get("origin"),
+		Cookies:    req.Header.Get("cookies"),
+		Scheme:     req.URL.Scheme,
+		RemoteAddr: remoteAddr,
+	}
 }
 
 // CommandResult is a result of performing controller action,
