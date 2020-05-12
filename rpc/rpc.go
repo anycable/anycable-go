@@ -62,6 +62,10 @@ func (c *Controller) Start() error {
 		PermitWithoutStream: true,             // send pings even without active streams
 	}
 
+	go WatchHealth(host, func(alive bool, err error) {
+		log.WithField("component", "grpc_health").Debugf("Health: %v %v", alive, err)
+	})
+
 	conn, err := grpc.Dial(
 		host,
 		grpc.WithInsecure(),
