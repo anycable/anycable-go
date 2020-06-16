@@ -35,6 +35,8 @@ func WebsocketHandler(app *node.Node, fetchHeaders []string, config *WSConfig) h
 			EnableCompression: config.EnableCompression,
 		}
 
+		w.Header().Set("x-anycable-version", utils.Version())
+
 		ws, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			ctx.Debugf("Websocket connection upgrade error: %#v", err.Error())

@@ -2,6 +2,8 @@
 
 ## 1.0.0-dev
 
+- Added AnyCable-Go version banner. ([@sponomarev][]
+
 - Added Redis Sentinel support. ([@rolandg][])
 
 - Send `disconnect` messages on server restart and authentication failures. ([@palkan][])
