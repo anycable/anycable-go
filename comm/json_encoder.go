@@ -3,7 +3,6 @@ package comm
 import (
 	"encoding/json"
 	"github.com/anycable/anycable-go/common"
-	"github.com/anycable/anycable-go/node"
 )
 
 type jsonEncoder struct {
@@ -13,15 +12,15 @@ func (jp jsonEncoder) Unmarshal(data []byte, v interface{}) error{
 	return json.Unmarshal(data, &v)
 }
 
-func (jp jsonEncoder) MarshalReply(message *node.Reply) ([]byte, error){
+func (jp jsonEncoder) MarshalReply(message *common.Reply) ([]byte, error){
 	return json.Marshal(&message)
 }
 
-func (jp jsonEncoder) MarshalPing(message *node.PingMessage) ([]byte, error){
+func (jp jsonEncoder) MarshalPing(message *common.PingMessage) ([]byte, error){
 	return json.Marshal(&message)
 }
 
-func (jp jsonEncoder) MarshalDisconnect(message *node.DisconnectMessage) ([]byte, error){
+func (jp jsonEncoder) MarshalDisconnect(message *common.DisconnectMessage) ([]byte, error){
 	return json.Marshal(&message)
 }
 
