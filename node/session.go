@@ -1,7 +1,7 @@
 package node
 
 import (
-	"encoding/json"
+	"github.com/anycable/anycable-go/comm"
 	"sync"
 	"time"
 
@@ -72,12 +72,12 @@ type pingMessage struct {
 	Message interface{} `json:"message"`
 }
 
-func (p *pingMessage) toJSON() []byte {
-	jsonStr, err := json.Marshal(&p)
+func (p *pingMessage) encodeMessage() []byte {
+	msg, err := comm.GetMessageEncoder().MarshalPing(&p)
 	if err != nil {
-		panic("Failed to build ping JSON 😲")
+		panic("Failed to build ping message 😲")
 	}
-	return jsonStr
+	return msg
 }
 
 // NewSession build a new Session struct from ws connetion and http request
@@ -266,5 +266,5 @@ func (s *Session) addPing() {
 }
 
 func newPingMessage() []byte {
-	return (&pingMessage{Type: "ping", Message: time.Now().Unix()}).toJSON()
+	return (&pingMessage{Type: "ping", Message: time.Now().Unix()}).encodeMessage()
 }

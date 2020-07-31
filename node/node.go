@@ -1,8 +1,8 @@
 package node
 
 import (
-	"encoding/json"
 	"fmt"
+	"github.com/anycable/anycable-go/comm"
 	"runtime"
 	"time"
 
@@ -39,12 +39,12 @@ type disconnectMessage struct {
 	Reconnect bool   `json:"reconnect"`
 }
 
-func (d *disconnectMessage) toJSON() []byte {
-	jsonStr, err := json.Marshal(&d)
+func (d *disconnectMessage) encodeMessage() []byte {
+	msg, err := comm.GetMessageEncoder().MarshalDisconnect(&d)
 	if err != nil {
-		panic("Failed to build disconnect JSON 😲")
+		panic("Failed to build disconnect message 😲")
 	}
-	return jsonStr
+	return msg
 }
 
 // AppNode describes a basic node interface
@@ -97,7 +97,7 @@ func (n *Node) HandleCommand(s *Session, raw []byte) error {
 
 	n.Metrics.Counter(metricsReceivedMsg).Inc()
 
-	if err := json.Unmarshal(raw, &msg); err != nil {
+	if err := comm.GetMessageEncoder().Unmarshal(raw, &msg); err != nil {
 		n.Metrics.Counter(metricsUnknownReceived).Inc()
 		return err
 	}
@@ -191,7 +191,7 @@ func (n *Node) Authenticate(s *Session) (err error) {
 	}
 
 	if res != nil {
-		n.handleCallReply(s, res.ToCallResult())
+		n.handleAuthenticateReply(s, res.ToCallResult())
 	}
 
 	return
@@ -324,9 +324,9 @@ func (n *Node) RemoteDisconnect(msg *common.RemoteDisconnectMessage) {
 	n.hub.disconnect <- msg
 }
 
-func transmit(s *Session, transmissions []string) {
+func transmit(s *Session, transmissions [][]byte) {
 	for _, msg := range transmissions {
-		s.Send([]byte(msg))
+		s.Send(msg)
 	}
 }
 
@@ -353,22 +353,40 @@ func (n *Node) handleCommandReply(s *Session, msg *common.Message, reply *common
 		s.env.MergeChannelState(msg.Identifier, &reply.IState)
 	}
 
-	n.handleCallReply(s, reply.ToCallResult())
+	n.handleCallReply(s, msg, reply.ToCallResult())
 }
 
-func (n *Node) handleCallReply(s *Session, reply *common.CallResult) {
+func (n *Node) handleCallReply(s *Session, msg *common.Message, reply *common.CallResult) {
+	n.handleCallResultConnectionState(s, reply)
+	n.handleCallResultBroadcasts(reply)
+
+	if reply.Transmissions != nil {
+		transmissions, _ := comm.GetMessageEncoder().MarshalTransmissions(reply.Transmissions, msg)
+		transmit(s, transmissions)
+	}
+}
+
+func (n *Node) handleAuthenticateReply(s *Session, reply *common.CallResult) {
+	n.handleCallResultConnectionState(s, reply)
+	n.handleCallResultBroadcasts(reply)
+
+	if reply.Transmissions != nil {
+		transmissions, _ := comm.GetMessageEncoder().MarshalAuthenticateTransmissions(reply.Transmissions)
+		transmit(s, transmissions)
+	}
+}
+
+func (n *Node) handleCallResultConnectionState(s *Session, reply *common.CallResult) {
 	if reply.CState != nil {
 		s.env.MergeConnectionState(&reply.CState)
 	}
+}
 
+func (n *Node) handleCallResultBroadcasts(reply *common.CallResult) {
 	if reply.Broadcasts != nil {
 		for _, broadcast := range reply.Broadcasts {
 			n.Broadcast(broadcast)
 		}
-	}
-
-	if reply.Transmissions != nil {
-		transmit(s, reply.Transmissions)
 	}
 }
 
@@ -424,5 +442,5 @@ func subscriptionsList(m map[string]bool) []string {
 }
 
 func newDisconnectMessage(reason string, reconnect bool) []byte {
-	return (&disconnectMessage{Type: "disconnect", Reason: reason, Reconnect: reconnect}).toJSON()
+	return (&disconnectMessage{Type: "disconnect", Reason: reason, Reconnect: reconnect}).encodeMessage()
 }

@@ -2,6 +2,7 @@ package node
 
 import (
 	"encoding/json"
+	"github.com/anycable/anycable-go/comm"
 	"sync"
 
 	"github.com/anycable/anycable-go/common"
@@ -22,12 +23,12 @@ type Reply struct {
 	Message    interface{} `json:"message"`
 }
 
-func (r *Reply) toJSON() []byte {
-	jsonStr, err := json.Marshal(&r)
+func (r *Reply) encodeMessage() []byte {
+	msg, err := comm.GetMessageEncoder().MarshalReply(&r)
 	if err != nil {
-		panic("Failed to build JSON")
+		panic("Failed to build message")
 	}
-	return jsonStr
+	return msg
 }
 
 // Hub stores all the sessions and the corresponding subscriptions info
@@ -287,7 +288,7 @@ func (h *Hub) broadcastToStream(stream string, data string) {
 			if msg, ok := buf[id]; ok {
 				bdata = msg
 			} else {
-				bdata = buildMessage(data, id)
+				bdata = buildBroadcastMessage(data, id)
 				buf[id] = bdata
 			}
 
@@ -314,11 +315,11 @@ func (h *Hub) disconnectSessions(identifier string, reconnect bool) {
 	}
 }
 
-func buildMessage(data string, identifier string) []byte {
+func buildBroadcastMessage(data string, identifier string) []byte {
 	var msg interface{}
 
 	// We ignore JSON deserialization failures and consider the message to be a string
 	json.Unmarshal([]byte(data), &msg) // nolint:errcheck
 
-	return (&Reply{Identifier: identifier, Message: msg}).toJSON()
+	return (&Reply{Identifier: identifier, Message: msg}).encodeMessage()
 }
