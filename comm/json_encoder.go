@@ -3,6 +3,7 @@ package comm
 import (
 	"encoding/json"
 	"github.com/anycable/anycable-go/common"
+	"github.com/anycable/anycable-go/node"
 )
 
 type jsonEncoder struct {
@@ -12,19 +13,19 @@ func (jp jsonEncoder) Unmarshal(data []byte, v interface{}) error{
 	return json.Unmarshal(data, &v)
 }
 
-func (jp jsonEncoder) MarshalReply(v interface{}) ([]byte, error){
-	return json.Marshal(&v)
+func (jp jsonEncoder) MarshalReply(message *node.Reply) ([]byte, error){
+	return json.Marshal(&message)
 }
 
-func (jp jsonEncoder) MarshalPing(v interface{}) ([]byte, error){
-	return json.Marshal(&v)
+func (jp jsonEncoder) MarshalPing(message *node.PingMessage) ([]byte, error){
+	return json.Marshal(&message)
 }
 
-func (jp jsonEncoder) MarshalDisconnect(v interface{}) ([]byte, error){
-	return json.Marshal(&v)
+func (jp jsonEncoder) MarshalDisconnect(message *node.DisconnectMessage) ([]byte, error){
+	return json.Marshal(&message)
 }
 
-func (jp jsonEncoder) MarshalTransmissions(transmissions []string, msg *common.Message) ([][]byte, error){
+func (jp jsonEncoder) MarshalTransmissions(transmissions []string, message *common.Message) ([][]byte, error){
 	var transmissionBytes [][]byte
 	for _, transmission := range transmissions{
 		transmissionBytes = append(transmissionBytes, []byte(transmission))

@@ -33,14 +33,14 @@ const (
 	metricsUnknownBroadcast = "failed_broadcast_msg_total"
 )
 
-type disconnectMessage struct {
+type DisconnectMessage struct {
 	Type      string `json:"type"`
 	Reason    string `json:"reason"`
 	Reconnect bool   `json:"reconnect"`
 }
 
-func (d *disconnectMessage) encodeMessage() []byte {
-	msg, err := comm.GetMessageEncoder().MarshalDisconnect(&d)
+func (d *DisconnectMessage) encodeMessage() []byte {
+	msg, err := comm.GetMessageEncoder().MarshalDisconnect(d)
 	if err != nil {
 		panic("Failed to build disconnect message 😲")
 	}
@@ -442,5 +442,5 @@ func subscriptionsList(m map[string]bool) []string {
 }
 
 func newDisconnectMessage(reason string, reconnect bool) []byte {
-	return (&disconnectMessage{Type: "disconnect", Reason: reason, Reconnect: reconnect}).encodeMessage()
+	return (&DisconnectMessage{Type: "disconnect", Reason: reason, Reconnect: reconnect}).encodeMessage()
 }

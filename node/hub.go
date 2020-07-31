@@ -24,7 +24,7 @@ type Reply struct {
 }
 
 func (r *Reply) encodeMessage() []byte {
-	msg, err := comm.GetMessageEncoder().MarshalReply(&r)
+	msg, err := comm.GetMessageEncoder().MarshalReply(r)
 	if err != nil {
 		panic("Failed to build message")
 	}
