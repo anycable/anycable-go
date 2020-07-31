@@ -16,14 +16,7 @@ type SubscriptionInfo struct {
 	identifier string
 }
 
-// Reply represents outgoing client message
-type Reply struct {
-	Type       string      `json:"type,omitempty"`
-	Identifier string      `json:"identifier"`
-	Message    interface{} `json:"message"`
-}
-
-func (r *Reply) encodeMessage() []byte {
+func encodeReplyMessage(r *common.Reply) []byte {
 	msg, err := comm.GetMessageEncoder().MarshalReply(r)
 	if err != nil {
 		panic("Failed to build message")
@@ -321,5 +314,5 @@ func buildBroadcastMessage(data string, identifier string) []byte {
 	// We ignore JSON deserialization failures and consider the message to be a string
 	json.Unmarshal([]byte(data), &msg) // nolint:errcheck
 
-	return (&Reply{Identifier: identifier, Message: msg}).encodeMessage()
+	return encodeReplyMessage(&common.Reply{Identifier: identifier, Message: msg})
 }

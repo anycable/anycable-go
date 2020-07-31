@@ -67,12 +67,7 @@ type Session struct {
 	Log         *log.Entry
 }
 
-type PingMessage struct {
-	Type    string      `json:"type"`
-	Message interface{} `json:"message"`
-}
-
-func (p *PingMessage) encodeMessage() []byte {
+func encodePingMessage(p *common.PingMessage) []byte {
 	msg, err := comm.GetMessageEncoder().MarshalPing(p)
 	if err != nil {
 		panic("Failed to build ping message 😲")
@@ -266,5 +261,5 @@ func (s *Session) addPing() {
 }
 
 func newPingMessage() []byte {
-	return (&PingMessage{Type: "ping", Message: time.Now().Unix()}).encodeMessage()
+	return encodePingMessage(&common.PingMessage{Type: "ping", Message: time.Now().Unix()})
 }
