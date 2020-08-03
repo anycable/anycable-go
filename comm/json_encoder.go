@@ -8,34 +8,38 @@ import (
 type jsonEncoder struct {
 }
 
-func (jp jsonEncoder) Unmarshal(data []byte, v interface{}) error{
+func (jp jsonEncoder) Unmarshal(data []byte, v interface{}) error {
 	return json.Unmarshal(data, &v)
 }
 
-func (jp jsonEncoder) MarshalReply(message *common.Reply) ([]byte, error){
+func (jp jsonEncoder) MarshalIsBinary() bool {
+	return false
+}
+
+func (jp jsonEncoder) MarshalReply(message *common.Reply) ([]byte, error) {
 	return json.Marshal(&message)
 }
 
-func (jp jsonEncoder) MarshalPing(message *common.PingMessage) ([]byte, error){
+func (jp jsonEncoder) MarshalPing(message *common.PingMessage) ([]byte, error) {
 	return json.Marshal(&message)
 }
 
-func (jp jsonEncoder) MarshalDisconnect(message *common.DisconnectMessage) ([]byte, error){
+func (jp jsonEncoder) MarshalDisconnect(message *common.DisconnectMessage) ([]byte, error) {
 	return json.Marshal(&message)
 }
 
-func (jp jsonEncoder) MarshalTransmissions(transmissions []string, message *common.Message) ([][]byte, error){
+func (jp jsonEncoder) MarshalTransmissions(transmissions []string, message *common.Message) ([][]byte, error) {
 	var transmissionBytes [][]byte
-	for _, transmission := range transmissions{
+	for _, transmission := range transmissions {
 		transmissionBytes = append(transmissionBytes, []byte(transmission))
 	}
 
 	return transmissionBytes, nil
 }
 
-func (jp jsonEncoder) MarshalAuthenticateTransmissions(transmissions []string) ([][]byte, error){
+func (jp jsonEncoder) MarshalAuthenticateTransmissions(transmissions []string) ([][]byte, error) {
 	var transmissionBytes [][]byte
-	for _, transmission := range transmissions{
+	for _, transmission := range transmissions {
 		transmissionBytes = append(transmissionBytes, []byte(transmission))
 	}
 

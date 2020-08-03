@@ -39,8 +39,9 @@ var (
 type frameType int
 
 const (
-	textFrame  frameType = 0
-	closeFrame frameType = 1
+	textFrame   frameType = 0
+	binaryFrame frameType = 2
+	closeFrame  frameType = 1
 )
 
 type sentFrame struct {
@@ -112,9 +113,12 @@ func NewSession(node *Node, ws *websocket.Conn, url string, headers map[string]s
 func (s *Session) SendMessages() {
 	defer s.Disconnect("Write Failed", CloseAbnormalClosure)
 	for message := range s.send {
+		binaryMessageType := false
 		switch message.frameType {
+		case binaryFrame:
+			binaryMessageType = true
 		case textFrame:
-			err := s.write(message.payload, time.Now().Add(writeWait))
+			err := s.write(message.payload, time.Now().Add(writeWait), binaryMessageType)
 
 			if err != nil {
 				return
@@ -164,7 +168,7 @@ func (s *Session) sendFrame(frame *sentFrame) {
 	s.mu.Unlock()
 }
 
-func (s *Session) write(message []byte, deadline time.Time) error {
+func (s *Session) write(message []byte, deadline time.Time, binary bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -172,7 +176,11 @@ func (s *Session) write(message []byte, deadline time.Time) error {
 		return err
 	}
 
-	w, err := s.ws.NextWriter(websocket.TextMessage)
+	messageType := websocket.TextMessage
+	if binary {
+		messageType = websocket.BinaryMessage
+	}
+	w, err := s.ws.NextWriter(messageType)
 
 	if err != nil {
 		return err
@@ -240,7 +248,7 @@ func (s *Session) Close(reason string, code int) {
 
 func (s *Session) sendPing() {
 	deadline := time.Now().Add(pingInterval / 2)
-	err := s.write(newPingMessage(), deadline)
+	err := s.write(newPingMessage(), deadline, comm.GetMessageEncoder().MarshalIsBinary())
 
 	if err == nil {
 		s.addPing()
