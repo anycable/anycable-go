@@ -134,8 +134,12 @@ func (s *Session) SendMessages() {
 }
 
 // Send data to client connection
-func (s *Session) Send(msg []byte) {
-	s.sendFrame(&sentFrame{frameType: textFrame, payload: msg})
+func (s *Session) Send(msg []byte, binary bool) {
+	frameType := textFrame
+	if binary {
+		frameType = binaryFrame
+	}
+	s.sendFrame(&sentFrame{frameType: frameType, payload: msg})
 }
 
 func (s *Session) sendClose(reason string, code int) {

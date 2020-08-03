@@ -142,7 +142,7 @@ func (n *Node) Shutdown() {
 			disconnectMessage := newDisconnectMessage(serverRestartReason, true)
 			// Close all registered sessions
 			for _, session := range n.hub.sessions {
-				session.Send(disconnectMessage)
+				session.Send(disconnectMessage, comm.GetMessageEncoder().MarshalIsBinary())
 				session.Disconnect("Shutdown", CloseGoingAway)
 			}
 
@@ -320,7 +320,7 @@ func (n *Node) RemoteDisconnect(msg *common.RemoteDisconnectMessage) {
 
 func transmit(s *Session, transmissions [][]byte) {
 	for _, msg := range transmissions {
-		s.Send(msg)
+		s.Send(msg, comm.GetMessageEncoder().MarshalIsBinary())
 	}
 }
 

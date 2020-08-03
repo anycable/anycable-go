@@ -285,7 +285,7 @@ func (h *Hub) broadcastToStream(stream string, data string) {
 				buf[id] = bdata
 			}
 
-			session.Send(bdata)
+			session.Send(bdata, comm.GetMessageEncoder().MarshalIsBinary())
 		}
 	}
 }
@@ -302,7 +302,7 @@ func (h *Hub) disconnectSessions(identifier string, reconnect bool) {
 
 	for id := range ids {
 		if ses, ok := h.sessions[id]; ok {
-			ses.Send(disconnectMessage)
+			ses.Send(disconnectMessage, comm.GetMessageEncoder().MarshalIsBinary())
 			ses.Disconnect("Closed remotely", CloseNormalClosure)
 		}
 	}
