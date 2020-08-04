@@ -113,12 +113,9 @@ func NewSession(node *Node, ws *websocket.Conn, url string, headers map[string]s
 func (s *Session) SendMessages() {
 	defer s.Disconnect("Write Failed", CloseAbnormalClosure)
 	for message := range s.send {
-		binaryMessageType := false
 		switch message.frameType {
-		case binaryFrame:
-			binaryMessageType = true
-		case textFrame:
-			err := s.write(message.payload, time.Now().Add(writeWait), binaryMessageType)
+		case textFrame, binaryFrame:
+			err := s.write(message.payload, time.Now().Add(writeWait), message.frameType == binaryFrame)
 
 			if err != nil {
 				return
