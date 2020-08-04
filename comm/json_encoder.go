@@ -8,8 +8,8 @@ import (
 type jsonEncoder struct {
 }
 
-func (jp jsonEncoder) Unmarshal(data []byte, v interface{}) error {
-	return json.Unmarshal(data, &v)
+func (jp jsonEncoder) Unmarshal(data []byte, message **common.Message) error {
+	return json.Unmarshal(data, message)
 }
 
 func (jp jsonEncoder) MarshalIsBinary() bool {

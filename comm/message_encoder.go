@@ -5,7 +5,7 @@ import (
 )
 
 type MessageEncoder interface {
-	Unmarshal(data []byte, v interface{}) error
+	Unmarshal(data []byte, message **common.Message) error
 	MarshalIsBinary() bool
 	MarshalReply(message *common.Reply) ([]byte, error)
 	MarshalPing(message *common.PingMessage) ([]byte, error)
