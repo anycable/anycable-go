@@ -29,15 +29,14 @@ func (jp jsonEncoder) MarshalDisconnect(message *common.DisconnectMessage) ([]by
 }
 
 func (jp jsonEncoder) MarshalTransmissions(transmissions []string, message *common.Message) ([][]byte, error) {
-	var transmissionBytes [][]byte
-	for _, transmission := range transmissions {
-		transmissionBytes = append(transmissionBytes, []byte(transmission))
-	}
-
-	return transmissionBytes, nil
+	return marshalTransmissions(transmissions)
 }
 
 func (jp jsonEncoder) MarshalAuthenticateTransmissions(transmissions []string) ([][]byte, error) {
+	return marshalTransmissions(transmissions)
+}
+
+func marshalTransmissions(transmissions []string) ([][]byte, error) {
 	var transmissionBytes [][]byte
 	for _, transmission := range transmissions {
 		transmissionBytes = append(transmissionBytes, []byte(transmission))
