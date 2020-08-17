@@ -138,6 +138,26 @@ type RemoteDisconnectMessage struct {
 	Reconnect  bool   `json:"reconnect"`
 }
 
+// PingMessage represents a server ping
+type PingMessage struct {
+	Type    string      `json:"type"`
+	Message interface{} `json:"message"`
+}
+
+// DisconnectMessage represents a server disconnect message
+type DisconnectMessage struct {
+	Type      string `json:"type"`
+	Reason    string `json:"reason"`
+	Reconnect bool   `json:"reconnect"`
+}
+
+// Reply represents outgoing client message
+type Reply struct {
+	Type       string      `json:"type,omitempty"`
+	Identifier string      `json:"identifier"`
+	Message    interface{} `json:"message"`
+}
+
 // PubSubMessageFromJSON takes raw JSON byte array and return the corresponding struct
 func PubSubMessageFromJSON(raw []byte) (interface{}, error) {
 	smsg := StreamMessage{}

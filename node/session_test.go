@@ -16,12 +16,12 @@ func TestSendRaceConditions(t *testing.T) {
 		wg.Add(2)
 		go func() {
 			go func() {
-				session.Send([]byte("hi!"))
+				session.Send([]byte("hi!"), false)
 				wg.Done()
 			}()
 
 			go func() {
-				session.Send([]byte("bye"))
+				session.Send([]byte("bye"), false)
 				wg.Done()
 			}()
 		}()
@@ -29,12 +29,12 @@ func TestSendRaceConditions(t *testing.T) {
 		wg.Add(2)
 		go func() {
 			go func() {
-				session.Send([]byte("bye"))
+				session.Send([]byte("bye"), false)
 				wg.Done()
 			}()
 
 			go func() {
-				session.Send([]byte("why"))
+				session.Send([]byte("why"), false)
 				wg.Done()
 			}()
 		}()

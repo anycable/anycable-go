@@ -2,6 +2,7 @@ package node
 
 import (
 	"encoding/json"
+	"github.com/anycable/anycable-go/comm"
 	"sync"
 
 	"github.com/anycable/anycable-go/common"
@@ -15,19 +16,12 @@ type SubscriptionInfo struct {
 	identifier string
 }
 
-// Reply represents outgoing client message
-type Reply struct {
-	Type       string      `json:"type,omitempty"`
-	Identifier string      `json:"identifier"`
-	Message    interface{} `json:"message"`
-}
-
-func (r *Reply) toJSON() []byte {
-	jsonStr, err := json.Marshal(&r)
+func encodeReplyMessage(r *common.Reply) []byte {
+	msg, err := comm.GetMessageEncoder().MarshalReply(r)
 	if err != nil {
-		panic("Failed to build JSON")
+		panic("Failed to build message")
 	}
-	return jsonStr
+	return msg
 }
 
 // Hub stores all the sessions and the corresponding subscriptions info
@@ -287,11 +281,11 @@ func (h *Hub) broadcastToStream(stream string, data string) {
 			if msg, ok := buf[id]; ok {
 				bdata = msg
 			} else {
-				bdata = buildMessage(data, id)
+				bdata = buildBroadcastMessage(data, id)
 				buf[id] = bdata
 			}
 
-			session.Send(bdata)
+			session.Send(bdata, comm.GetMessageEncoder().MarshalIsBinary())
 		}
 	}
 }
@@ -308,17 +302,17 @@ func (h *Hub) disconnectSessions(identifier string, reconnect bool) {
 
 	for id := range ids {
 		if ses, ok := h.sessions[id]; ok {
-			ses.Send(disconnectMessage)
+			ses.Send(disconnectMessage, comm.GetMessageEncoder().MarshalIsBinary())
 			ses.Disconnect("Closed remotely", CloseNormalClosure)
 		}
 	}
 }
 
-func buildMessage(data string, identifier string) []byte {
+func buildBroadcastMessage(data string, identifier string) []byte {
 	var msg interface{}
 
 	// We ignore JSON deserialization failures and consider the message to be a string
 	json.Unmarshal([]byte(data), &msg) // nolint:errcheck
 
-	return (&Reply{Identifier: identifier, Message: msg}).toJSON()
+	return encodeReplyMessage(&common.Reply{Identifier: identifier, Message: msg})
 }

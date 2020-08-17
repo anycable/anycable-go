@@ -1,7 +1,7 @@
 package node
 
 import (
-	"encoding/json"
+	"github.com/anycable/anycable-go/comm"
 	"sync"
 	"time"
 
@@ -39,8 +39,9 @@ var (
 type frameType int
 
 const (
-	textFrame  frameType = 0
-	closeFrame frameType = 1
+	textFrame   frameType = 0
+	binaryFrame frameType = 2
+	closeFrame  frameType = 1
 )
 
 type sentFrame struct {
@@ -67,17 +68,12 @@ type Session struct {
 	Log         *log.Entry
 }
 
-type pingMessage struct {
-	Type    string      `json:"type"`
-	Message interface{} `json:"message"`
-}
-
-func (p *pingMessage) toJSON() []byte {
-	jsonStr, err := json.Marshal(&p)
+func encodePingMessage(p *common.PingMessage) []byte {
+	msg, err := comm.GetMessageEncoder().MarshalPing(p)
 	if err != nil {
-		panic("Failed to build ping JSON 😲")
+		panic("Failed to build ping message 😲")
 	}
-	return jsonStr
+	return msg
 }
 
 // NewSession build a new Session struct from ws connetion and http request
@@ -118,8 +114,8 @@ func (s *Session) SendMessages() {
 	defer s.Disconnect("Write Failed", CloseAbnormalClosure)
 	for message := range s.send {
 		switch message.frameType {
-		case textFrame:
-			err := s.write(message.payload, time.Now().Add(writeWait))
+		case textFrame, binaryFrame:
+			err := s.write(message.payload, time.Now().Add(writeWait), message.frameType == binaryFrame)
 
 			if err != nil {
 				return
@@ -135,8 +131,12 @@ func (s *Session) SendMessages() {
 }
 
 // Send data to client connection
-func (s *Session) Send(msg []byte) {
-	s.sendFrame(&sentFrame{frameType: textFrame, payload: msg})
+func (s *Session) Send(msg []byte, binary bool) {
+	frameType := textFrame
+	if binary {
+		frameType = binaryFrame
+	}
+	s.sendFrame(&sentFrame{frameType: frameType, payload: msg})
 }
 
 func (s *Session) sendClose(reason string, code int) {
@@ -169,7 +169,7 @@ func (s *Session) sendFrame(frame *sentFrame) {
 	s.mu.Unlock()
 }
 
-func (s *Session) write(message []byte, deadline time.Time) error {
+func (s *Session) write(message []byte, deadline time.Time, binary bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -177,7 +177,11 @@ func (s *Session) write(message []byte, deadline time.Time) error {
 		return err
 	}
 
-	w, err := s.ws.NextWriter(websocket.TextMessage)
+	messageType := websocket.TextMessage
+	if binary {
+		messageType = websocket.BinaryMessage
+	}
+	w, err := s.ws.NextWriter(messageType)
 
 	if err != nil {
 		return err
@@ -245,7 +249,7 @@ func (s *Session) Close(reason string, code int) {
 
 func (s *Session) sendPing() {
 	deadline := time.Now().Add(pingInterval / 2)
-	err := s.write(newPingMessage(), deadline)
+	err := s.write(newPingMessage(), deadline, comm.GetMessageEncoder().MarshalIsBinary())
 
 	if err == nil {
 		s.addPing()
@@ -266,5 +270,5 @@ func (s *Session) addPing() {
 }
 
 func newPingMessage() []byte {
-	return (&pingMessage{Type: "ping", Message: time.Now().Unix()}).toJSON()
+	return encodePingMessage(&common.PingMessage{Type: "ping", Message: time.Now().Unix()})
 }
