@@ -9,6 +9,7 @@ import (
 
 	"github.com/anycable/anycable-go/server"
 	"github.com/apex/log"
+	"github.com/smira/go-statsd"
 )
 
 // Printer describes metrics logging interface
@@ -27,6 +28,7 @@ type Metrics struct {
 	gauges         map[string]*Gauge
 	shutdownCh     chan struct{}
 	log            *log.Entry
+	statsdClient   *statsd.Client
 }
 
 // BasePrinter simply logs stats as structured log
@@ -90,6 +92,10 @@ func FromConfig(config *Config) (*Metrics, error) {
 		instance.server.Mux.Handle(instance.httpPath, http.HandlerFunc(instance.PrometheusHandler))
 	}
 
+	if config.StatsdEnabled() {
+		instance.InitStatsdClient(config.StatsdHost)
+	}
+
 	return instance, nil
 }
 
@@ -134,6 +140,10 @@ func (m *Metrics) Run() error {
 				snapshot := m.IntervalSnapshot()
 
 				m.printer.Print(snapshot)
+			}
+
+			if m.statsdClient != nil {
+				m.StatsdSend()
 			}
 		}
 	}

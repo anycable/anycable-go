@@ -20,6 +20,7 @@ require (
 	github.com/namsral/flag v1.7.4-pre
 	github.com/pkg/errors v0.8.1 // indirect
 	github.com/processout/grpc-go-pool v1.2.1 // indirect
+	github.com/smira/go-statsd v1.3.1
 	github.com/stretchr/testify v1.4.0
 	github.com/syossan27/tebata v0.0.0-20180602121909-b283fe4bc5ba
 	golang.org/x/crypto v0.0.0-20190701094942-4def268fd1a4 // indirect

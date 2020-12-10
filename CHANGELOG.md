@@ -4,6 +4,8 @@
 
 - Added `rpc_pending_num` metric. ([@palkan][])
 
+- Add statsd support for metrics. ([@jeremycw][])
+
 ## 1.0.2 (2020-09-08)
 
 - Add channel states to `disconnect` requests. ([@palkan][])
@@ -82,3 +84,4 @@ See [Changelog](https://github.com/anycable/anycable-go/blob/0-6-stable/CHANGELO
 [@bibendi]: https://github.com/bibendi
 [@rolandg]: https://github.com/rolandg
 [@gr8bit]: https://github.com/gr8bit
+[@jeremycw]: https://github.com/jeremycw

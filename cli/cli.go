@@ -87,6 +87,7 @@ func init() {
 	fs.StringVar(&defaults.Metrics.HTTP, "metrics_http", "", "")
 	fs.StringVar(&defaults.Metrics.Host, "metrics_host", "", "")
 	fs.IntVar(&defaults.Metrics.Port, "metrics_port", 0, "")
+	fs.StringVar(&defaults.Metrics.StatsdHost, "metrics_statsd_host", "", "")
 
 	// CLI vars
 	fs.BoolVar(&showHelp, "h", false, "")
@@ -162,6 +163,7 @@ OPTIONS
   --metrics_http                         Enable HTTP metrics endpoint at the specified path, default: "" (disabled), env: ANYCABLE_METRICS_HTTP
   --metrics_host                         Server host for metrics endpoint, default: the same as for main server, env: ANYCABLE_METRICS_HOST
   --metrics_port                         Server port for metrics endpoint, default: the same as for main server, env: ANYCABLE_METRICS_PORT
+  --metrics_statsd_host                  Server host for metrics sent to statsd server in the format <host>:<port>, default: "", env: ANYCABLE_METRICS_STATSD_HOST
 
   --read_buffer_size                     WebSocket connection read buffer size, default: 1024, env: ANYCABLE_READ_BUFFER_SIZE
   --write_buffer_size                    WebSocket connection write buffer size, default: 1024, env: ANYCABLE_WRITE_BUFFER_SIZE
