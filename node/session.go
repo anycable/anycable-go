@@ -1,58 +1,53 @@
 package node
 
 import (
+	"net"
 	"sync"
 	"time"
 
 	"github.com/anycable/anycable-go/common"
 	"github.com/anycable/anycable-go/utils"
 	"github.com/apex/log"
-	"github.com/gorilla/websocket"
+	"github.com/gobwas/ws"
+	"github.com/gobwas/ws/wsutil"
 )
 
 const (
 	// CloseNormalClosure indicates normal closure
-	CloseNormalClosure = websocket.CloseNormalClosure
+	CloseNormalClosure = ws.StatusNormalClosure
 
 	// CloseInternalServerErr indicates closure because of internal error
-	CloseInternalServerErr = websocket.CloseInternalServerErr
+	CloseInternalServerErr = ws.StatusInternalServerError
 
 	// CloseAbnormalClosure indicates abnormal close
-	CloseAbnormalClosure = websocket.CloseAbnormalClosure
+	CloseAbnormalClosure = ws.StatusAbnormalClosure
 
 	// CloseGoingAway indicates closing because of server shuts down or client disconnects
-	CloseGoingAway = websocket.CloseGoingAway
+	CloseGoingAway = ws.StatusGoingAway
+
+	// CloseNoStatusReceived indicates no status close
+	CloseNoStatusReceived = ws.StatusNoStatusRcvd
 
 	writeWait    = 10 * time.Second
 	pingInterval = 3 * time.Second
 )
 
-var (
-	expectedCloseStatuses = []int{
-		websocket.CloseNormalClosure,    // Reserved in case ActionCable fixes its behaviour
-		websocket.CloseGoingAway,        // Web browser page was closed
-		websocket.CloseNoStatusReceived, // ActionCable don't care about closing
-	}
-)
-
-type frameType int
-
 const (
-	textFrame  frameType = 0
-	closeFrame frameType = 1
+	textFrame  ws.OpCode = ws.OpText
+	closeFrame ws.OpCode = ws.OpClose
 )
 
 type sentFrame struct {
-	frameType   frameType
+	frameType   ws.OpCode
 	payload     []byte
-	closeCode   int
+	closeCode   ws.StatusCode
 	closeReason string
 }
 
 // Session represents active client
 type Session struct {
 	node          *Node
-	ws            *websocket.Conn
+	conn          net.Conn
 	env           *common.SessionEnv
 	subscriptions map[string]bool
 	send          chan sentFrame
@@ -67,10 +62,10 @@ type Session struct {
 }
 
 // NewSession build a new Session struct from ws connetion and http request
-func NewSession(node *Node, ws *websocket.Conn, url string, headers map[string]string, uid string) (*Session, error) {
+func NewSession(node *Node, conn net.Conn, url string, headers map[string]string, uid string) (*Session, error) {
 	session := &Session{
 		node:          node,
-		ws:            ws,
+		conn:          conn,
 		env:           common.NewSessionEnv(url, &headers),
 		subscriptions: make(map[string]bool),
 		send:          make(chan sentFrame, 256),
@@ -111,7 +106,7 @@ func (s *Session) SendMessages() {
 				return
 			}
 		case closeFrame:
-			utils.CloseWS(s.ws, message.closeCode, message.closeReason)
+			utils.CloseWS(s.conn, message.closeCode, message.closeReason)
 			return
 		default:
 			s.Log.Errorf("Unknown frame type: %v", message)
@@ -125,7 +120,7 @@ func (s *Session) Send(msg []byte) {
 	s.sendFrame(&sentFrame{frameType: textFrame, payload: msg})
 }
 
-func (s *Session) sendClose(reason string, code int) {
+func (s *Session) sendClose(reason string, code ws.StatusCode) {
 	s.sendFrame(&sentFrame{
 		frameType:   closeFrame,
 		closeReason: reason,
@@ -159,37 +154,25 @@ func (s *Session) write(message []byte, deadline time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if err := s.ws.SetWriteDeadline(deadline); err != nil {
-		return err
-	}
+	err := wsutil.WriteServerMessage(s.conn, textFrame, message)
 
-	w, err := s.ws.NextWriter(websocket.TextMessage)
-
-	if err != nil {
-		return err
-	}
-
-	if _, err = w.Write(message); err != nil {
-		return err
-	}
-
-	return w.Close()
+	return err
 }
 
 // ReadMessages reads messages from ws connection and send them to node
 func (s *Session) ReadMessages() {
 	for {
-		_, message, err := s.ws.ReadMessage()
+		message, op, err := wsutil.ReadClientData(s.conn)
 
 		if err != nil {
-			if websocket.IsCloseError(err, expectedCloseStatuses...) {
-				s.Log.Debugf("Websocket closed: %v", err)
-				s.Disconnect("Read closed", CloseNormalClosure)
-			} else {
-				s.Log.Debugf("Websocket close error: %v", err)
-				s.Disconnect("Read failed", CloseAbnormalClosure)
-			}
+			s.Log.Debugf("Websocket close error: %v", err)
+			s.Disconnect("Read failed", CloseAbnormalClosure)
 			break
+		}
+
+		if op == closeFrame {
+			s.Log.Debugf("Websocket closed: %v", err)
+			s.Disconnect("Read closed", CloseNormalClosure)
 		}
 
 		if err := s.node.HandleCommand(s, message); err != nil {
@@ -199,7 +182,7 @@ func (s *Session) ReadMessages() {
 }
 
 // Disconnect enqueues RPC disconnect request and closes the connection
-func (s *Session) Disconnect(reason string, code int) {
+func (s *Session) Disconnect(reason string, code ws.StatusCode) {
 	s.mu.Lock()
 	if s.connected {
 		defer s.node.Disconnect(s) // nolint:errcheck
@@ -211,7 +194,7 @@ func (s *Session) Disconnect(reason string, code int) {
 }
 
 // Close websocket connection with the specified reason
-func (s *Session) Close(reason string, code int) {
+func (s *Session) Close(reason string, code ws.StatusCode) {
 	s.mu.Lock()
 
 	if s.closed {

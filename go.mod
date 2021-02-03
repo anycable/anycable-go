@@ -7,6 +7,9 @@ require (
 	github.com/FZambia/sentinel v1.1.0
 	github.com/apex/log v1.1.0
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/gobwas/httphead v0.1.0 // indirect
+	github.com/gobwas/pool v0.2.1 // indirect
+	github.com/gobwas/ws v1.1.0-rc.2
 	github.com/golang-collections/go-datastructures v0.0.0-20150211160725-59788d5eb259
 	github.com/golang/protobuf v1.4.1
 	github.com/gomodule/redigo v2.0.0+incompatible
@@ -25,7 +28,6 @@ require (
 	golang.org/x/crypto v0.0.0-20190701094942-4def268fd1a4 // indirect
 	golang.org/x/mobile v0.0.0-20190806162312-597adff16ade // indirect
 	golang.org/x/net v0.0.0-20200506145744-7e3656a0809f // indirect
-	golang.org/x/sys v0.0.0-20200511232937-7e40ca221e25 // indirect
 	golang.org/x/tools v0.0.0-20190808195139-e713427fea3f // indirect
 	google.golang.org/genproto v0.0.0-20200511104702-f5ebc3bea380 // indirect
 	google.golang.org/grpc v1.29.1

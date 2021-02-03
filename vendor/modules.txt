@@ -10,6 +10,19 @@ github.com/apex/log/handlers/json
 # github.com/davecgh/go-spew v1.1.1
 ## explicit
 github.com/davecgh/go-spew/spew
+# github.com/gobwas/httphead v0.1.0
+## explicit
+github.com/gobwas/httphead
+# github.com/gobwas/pool v0.2.1
+## explicit
+github.com/gobwas/pool
+github.com/gobwas/pool/internal/pmath
+github.com/gobwas/pool/pbufio
+github.com/gobwas/pool/pbytes
+# github.com/gobwas/ws v1.1.0-rc.2
+## explicit
+github.com/gobwas/ws
+github.com/gobwas/ws/wsutil
 # github.com/golang-collections/go-datastructures v0.0.0-20150211160725-59788d5eb259
 ## explicit
 github.com/golang-collections/go-datastructures/queue
@@ -73,8 +86,7 @@ golang.org/x/net/http2/hpack
 golang.org/x/net/idna
 golang.org/x/net/internal/timeseries
 golang.org/x/net/trace
-# golang.org/x/sys v0.0.0-20200511232937-7e40ca221e25
-## explicit
+# golang.org/x/sys v0.0.0-20201207223542-d4d67f95c62d
 golang.org/x/sys/internal/unsafeheader
 golang.org/x/sys/unix
 # golang.org/x/text v0.3.2

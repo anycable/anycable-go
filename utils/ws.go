@@ -1,15 +1,16 @@
 package utils
 
 import (
-	"time"
+	"net"
 
-	"github.com/gorilla/websocket"
+	"github.com/gobwas/ws"
 )
 
 // CloseWS closes WebSocket connection with the specified close code and reason
-func CloseWS(ws *websocket.Conn, code int, reason string) {
-	deadline := time.Now().Add(time.Second)
-	msg := websocket.FormatCloseMessage(code, reason)
-	ws.WriteControl(websocket.CloseMessage, msg, deadline) //nolint:errcheck
-	ws.Close()
+func CloseWS(conn net.Conn, code ws.StatusCode, reason string) {
+	ws.WriteFrame(conn, ws.NewCloseFrame(ws.NewCloseFrameBody(
+		code,
+		reason,
+	)))
+	conn.Write(ws.CompiledClose)
 }
