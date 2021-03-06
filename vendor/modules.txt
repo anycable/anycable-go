@@ -52,6 +52,9 @@ github.com/pkg/errors
 github.com/pmezard/go-difflib/difflib
 # github.com/processout/grpc-go-pool v1.2.1
 ## explicit
+# github.com/smira/go-statsd v1.3.1
+## explicit
+github.com/smira/go-statsd
 # github.com/stretchr/objx v0.1.0
 github.com/stretchr/objx
 # github.com/stretchr/testify v1.4.0

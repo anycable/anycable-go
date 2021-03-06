@@ -8,6 +8,7 @@ type Config struct {
 	HTTP         string
 	Host         string
 	Port         int
+	StatsdHost   string
 }
 
 // NewConfig creates an empty Config struct
@@ -23,6 +24,10 @@ func (c *Config) LogEnabled() bool {
 // HTTPEnabled returns true iff HTTP is not empty
 func (c *Config) HTTPEnabled() bool {
 	return c.HTTP != ""
+}
+
+func (c *Config) StatsdEnabled() bool {
+	return c.StatsdHost != ""
 }
 
 // LogFormatterEnabled returns true iff LogFormatter is not empty
