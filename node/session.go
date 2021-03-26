@@ -24,6 +24,10 @@ const (
 	CloseGoingAway = websocket.CloseGoingAway
 
 	writeWait = 10 * time.Second
+
+	// Metrics
+	metricsSentMsg = "server_msg_total"
+	metricsFailedSent = "failed_server_msg_total"
 )
 
 var (
@@ -140,9 +144,11 @@ func (s *Session) sendFrame(frame *sentFrame) {
 
 	select {
 	case s.send <- *frame:
+		s.node.Metrics.Counter(metricsSentMsg).Inc()
 	default:
 		if s.send != nil {
 			close(s.send)
+			s.node.Metrics.Counter(metricsFailedSent).Inc()
 			defer s.Disconnect("Write failed", CloseAbnormalClosure)
 		}
 
