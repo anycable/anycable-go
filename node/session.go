@@ -24,10 +24,6 @@ const (
 	CloseGoingAway = websocket.CloseGoingAway
 
 	writeWait = 10 * time.Second
-
-	// Metrics
-	metricsSentMsg = "server_msg_total"
-	metricsFailedSent = "failed_server_msg_total"
 )
 
 var (

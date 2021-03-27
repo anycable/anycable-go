@@ -28,6 +28,8 @@ const (
 	metricsUnknownReceived  = "failed_client_msg_total"
 	metricsBroadcastMsg     = "broadcast_msg_total"
 	metricsUnknownBroadcast = "failed_broadcast_msg_total"
+	metricsSentMsg          = "server_msg_total"
+	metricsFailedSent       = "failed_server_msg_total"
 )
 
 // AppNode describes a basic node interface
@@ -401,6 +403,9 @@ func (n *Node) registerMetrics() {
 	n.Metrics.RegisterCounter(metricsUnknownReceived, "The total number of unrecognized messages received from clients")
 	n.Metrics.RegisterCounter(metricsBroadcastMsg, "The total number of messages received through PubSub (for broadcast)")
 	n.Metrics.RegisterCounter(metricsUnknownBroadcast, "The total number of unrecognized messages received through PubSub")
+	n.Metrics.RegisterCounter(metricsSentMsg, "The total number messages sent to the clients")
+	n.Metrics.RegisterCounter(metricsFailedSent, "The total number of messages failed to send to the clients")
+
 }
 
 func subscriptionsList(m map[string]bool) []string {
