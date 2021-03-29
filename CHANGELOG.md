@@ -2,6 +2,8 @@
 
 ## master
 
+- Added `server_msg_total` and `failed_server_msg_total` metrics. ([@prburgu][])
+
 ## 1.0.5 (2021-03-17)
 
 - Fix interval values for counters. ([@prburgu][])
