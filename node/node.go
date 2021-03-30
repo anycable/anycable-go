@@ -404,7 +404,7 @@ func (n *Node) registerMetrics() {
 	n.Metrics.RegisterCounter(metricsBroadcastMsg, "The total number of messages received through PubSub (for broadcast)")
 	n.Metrics.RegisterCounter(metricsUnknownBroadcast, "The total number of unrecognized messages received through PubSub")
 	n.Metrics.RegisterCounter(metricsSentMsg, "The total number of messages sent to clients")
-	n.Metrics.RegisterCounter(metricsFailedSent, "The total number of messages failed to send to the clients")
+	n.Metrics.RegisterCounter(metricsFailedSent, "The total number of messages failed to send to clients")
 
 }
 
