@@ -105,7 +105,10 @@ func (s *Session) SendMessages() {
 			err := s.write(message.payload, time.Now().Add(writeWait))
 
 			if err != nil {
+				s.node.Metrics.Counter(metricsSentMsg).Inc()
 				return
+			} else {
+				s.node.Metrics.Counter(metricsFailedSent).Inc()
 			}
 		case closeFrame:
 			utils.CloseWS(s.ws, message.closeCode, message.closeReason)
@@ -140,16 +143,10 @@ func (s *Session) sendFrame(frame *sentFrame) {
 
 	select {
 	case s.send <- *frame:
-		if s.node != nil {
-			s.node.Metrics.Counter(metricsSentMsg).Inc()
-		}
 	default:
 		if s.send != nil {
 			close(s.send)
 			defer s.Disconnect("Write failed", CloseAbnormalClosure)
-			if s.node != nil {
-				s.node.Metrics.Counter(metricsFailedSent).Inc()
-			}
 		}
 
 		s.send = nil
