@@ -105,10 +105,10 @@ func (s *Session) SendMessages() {
 			err := s.write(message.payload, time.Now().Add(writeWait))
 
 			if err != nil {
-				s.node.Metrics.Counter(metricsSentMsg).Inc()
+				s.node.Metrics.Counter(metricsFailedSent).Inc()
 				return
 			} else {
-				s.node.Metrics.Counter(metricsFailedSent).Inc()
+				s.node.Metrics.Counter(metricsSentMsg).Inc()
 			}
 		case closeFrame:
 			utils.CloseWS(s.ws, message.closeCode, message.closeReason)
