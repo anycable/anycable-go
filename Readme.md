@@ -4,6 +4,7 @@
 [![Docker](https://img.shields.io/docker/pulls/anycable/anycable-go.svg)](https://hub.docker.com/r/anycable/anycable-go/)
 [![Gitter](https://img.shields.io/badge/gitter-join%20chat%20%E2%86%92-brightgreen.svg)](https://gitter.im/anycable/anycable-go)
 [![Documentation](https://img.shields.io/badge/docs-link-brightgreen.svg)](https://docs.anycable.io/anycable-go/getting_started)
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fanycable%2Fanycable-go.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Fanycable%2Fanycable-go?ref=badge_shield)
 # AnyCable-Go WebSocket Server
 
 WebSocket server for [AnyCable](https://github.com/anycable/anycable).
@@ -106,6 +107,9 @@ Please, provide reproduction script (using [this template](https://github.com/an
 ## License
 
 The library is available as open source under the terms of the [MIT License](http://opensource.org/licenses/MIT).
+
+
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fanycable%2Fanycable-go.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Fanycable%2Fanycable-go?ref=badge_large)
 
 ## Security Contact
 
