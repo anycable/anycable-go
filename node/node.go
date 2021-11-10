@@ -224,9 +224,20 @@ func (n *Node) Subscribe(s *Session, msg *common.Message) (res *common.CommandRe
 	s.smu.Lock()
 
 	if _, ok := s.subscriptions[msg.Identifier]; ok {
-		s.smu.Unlock()
-		err = fmt.Errorf("Already subscribed to %s", msg.Identifier)
-		return
+		res, err = n.controller.Unsubscribe(s.UID, s.env, s.Identifiers, msg.Identifier)
+
+		if err != nil {
+			if res == nil || res.Status == common.ERROR {
+				s.Log.Errorf("Unsubscribe error: %v", err)
+			}
+		} else {
+			// Make sure to remove all streams subscriptions
+			res.StopAllStreams = true
+
+			delete(s.subscriptions, msg.Identifier)
+
+			s.Log.Debugf("Unsubscribed from channel: %s", msg.Identifier)
+		}
 	}
 
 	res, err = n.controller.Subscribe(s.UID, s.env, s.Identifiers, msg.Identifier)
