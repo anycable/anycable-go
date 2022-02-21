@@ -199,6 +199,10 @@ jobs:
         name: Cache latest master tag
         command: |
           echo $(git tag --merged master -l --sort=-version:refname "v*" | head -n1) > latest-tag.log
+    - run:
+        name: Download Go deps
+        command: |
+          go mod vendor
     - persist_to_workspace:
         root: .
         paths: .
