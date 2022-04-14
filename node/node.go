@@ -7,16 +7,13 @@ import (
 	"time"
 
 	"github.com/anycable/anycable-go/common"
+	"github.com/anycable/anycable-go/hub"
 	"github.com/anycable/anycable-go/metrics"
 	"github.com/anycable/anycable-go/ws"
 	"github.com/apex/log"
 )
 
 const (
-	// serverRestartReason is the disconnect reason on shutdown
-	serverRestartReason    = "server_restart"
-	remoteDisconnectReason = "remote"
-
 	metricsGoroutines      = "goroutines_num"
 	metricsMemSys          = "mem_sys_bytes"
 	metricsClientsNum      = "clients_num"
@@ -61,7 +58,7 @@ type Node struct {
 	Metrics *metrics.Metrics
 
 	config       *Config
-	hub          *Hub
+	hub          *hub.Hub
 	controller   Controller
 	disconnector Disconnector
 	shutdownCh   chan struct{}
@@ -80,7 +77,7 @@ func NewNode(controller Controller, metrics *metrics.Metrics, config *Config) *N
 		log:        log.WithFields(log.Fields{"context": "node"}),
 	}
 
-	node.hub = NewHub(config.HubGopoolSize)
+	node.hub = hub.NewHub(config.HubGopoolSize)
 
 	node.registerMetrics()
 
@@ -137,7 +134,9 @@ func (n *Node) HandlePubSub(raw []byte) {
 }
 
 func (n *Node) LookupSession(id string) *Session {
-	return n.hub.findByIdentifier(id)
+	hubSession := n.hub.FindByIdentifier(id)
+	session, _ := hubSession.(*Session)
+	return session
 }
 
 // Shutdown stops all services (hub, controller)
@@ -156,14 +155,9 @@ func (n *Node) Shutdown() (err error) {
 
 		if active > 0 {
 			n.log.Infof("Closing active connections: %d", active)
-			disconnectMessage := newDisconnectMessage(serverRestartReason, true)
-			// Close all registered sessions
-			n.hub.sessionsMu.RLock()
-			for _, session := range n.hub.sessions {
-				session.Send(disconnectMessage)
-				session.Disconnect("Shutdown", ws.CloseGoingAway)
-			}
-			n.hub.sessionsMu.RUnlock()
+			disconnectMessage := common.NewDisconnectMessage(common.SERVER_RESTART_REASON, true)
+
+			n.hub.DisconnectSesssions(disconnectMessage, common.SERVER_RESTART_REASON)
 
 			n.log.Info("All active connections closed")
 
@@ -205,7 +199,7 @@ func (n *Node) Authenticate(s *Session) (res *common.ConnectResult, err error) {
 		s.Identifiers = res.Identifier
 		s.Connected = true
 
-		n.hub.addSession(s)
+		n.hub.AddSession(s)
 	} else {
 		if res.Status == common.FAILURE {
 			n.Metrics.Counter(metricsFailedAuths).Inc()
@@ -328,7 +322,7 @@ func (n *Node) Broadcast(msg *common.StreamMessage) {
 
 // Disconnect adds session to disconnector queue and unregister session from hub
 func (n *Node) Disconnect(s *Session) error {
-	n.hub.RemoveSession(s)
+	n.hub.RemoveSessionLater(s)
 	return n.disconnector.Enqueue(s)
 }
 
@@ -380,7 +374,7 @@ func (n *Node) handleCommandReply(s *Session, msg *common.Message, reply *common
 
 	if reply.Streams != nil {
 		for _, stream := range reply.Streams {
-			n.hub.subscribeSession(s.UID, stream, msg.Identifier)
+			n.hub.SubscribeSession(s.UID, stream, msg.Identifier)
 		}
 	}
 
@@ -468,8 +462,4 @@ func subscriptionsList(m map[string]bool) []string {
 		i++
 	}
 	return keys
-}
-
-func newDisconnectMessage(reason string, reconnect bool) *common.DisconnectMessage {
-	return &common.DisconnectMessage{Type: "disconnect", Reason: reason, Reconnect: reconnect}
 }

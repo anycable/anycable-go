@@ -25,6 +25,12 @@ const (
 	UnsubscribedType = "unsubscribed"
 )
 
+// Disconnect reasons
+const (
+	SERVER_RESTART_REASON    = "server_restart"
+	REMOTE_DISCONNECT_REASON = "remote"
+)
+
 // SessionEnv represents the underlying HTTP connection data:
 // URL and request headers
 type SessionEnv struct {
@@ -209,6 +215,10 @@ type DisconnectMessage struct {
 
 func (d *DisconnectMessage) GetType() string {
 	return DisconnectType
+}
+
+func NewDisconnectMessage(reason string, reconnect bool) *DisconnectMessage {
+	return &DisconnectMessage{Type: "disconnect", Reason: reason, Reconnect: reconnect}
 }
 
 // Reply represents an outgoing client message

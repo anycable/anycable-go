@@ -1,4 +1,4 @@
-package node
+package hub
 
 import (
 	"encoding/json"
@@ -7,9 +7,15 @@ import (
 	"github.com/anycable/anycable-go/common"
 	"github.com/anycable/anycable-go/encoders"
 	"github.com/anycable/anycable-go/utils"
-	"github.com/anycable/anycable-go/ws"
 	"github.com/apex/log"
 )
+
+type HubSession interface {
+	GetID() string
+	GetIdentifiers() string
+	Send(msg encoders.EncodedMessage)
+	DisconnectWithMessage(msg encoders.EncodedMessage, code string)
+}
 
 // HubSubscription contains information about session-channel(-stream) subscription
 type HubSubscription struct {
@@ -22,13 +28,13 @@ type HubSubscription struct {
 // HubRegistration represents registration event ("add" or "remove")
 type HubRegistration struct {
 	event   string
-	session *Session
+	session HubSession
 }
 
 // Hub stores all the sessions and the corresponding subscriptions info
 type Hub struct {
 	// Registered sessions
-	sessions map[string]*Session
+	sessions map[string]HubSession
 
 	// Identifiers to session
 	identifiers map[string]map[string]bool
@@ -79,7 +85,7 @@ func NewHub(poolSize int) *Hub {
 		disconnect:      make(chan *common.RemoteDisconnectMessage, 128),
 		register:        make(chan HubRegistration, 2048),
 		subscribe:       make(chan HubSubscription, 128),
-		sessions:        make(map[string]*Session),
+		sessions:        make(map[string]HubSession),
 		identifiers:     make(map[string]map[string]bool),
 		streams:         make(map[string]map[string]map[string]bool),
 		sessionsStreams: make(map[string]map[string][]string),
@@ -96,24 +102,24 @@ func (h *Hub) Run() {
 		select {
 		case r := <-h.register:
 			if r.event == "add" {
-				h.addSession(r.session)
+				h.AddSession(r.session)
 			} else {
-				h.removeSession(r.session)
+				h.RemoveSession(r.session)
 			}
 
 		case subinfo := <-h.subscribe:
 			switch subinfo.event {
 			case "add":
 				{
-					h.subscribeSession(subinfo.session, subinfo.stream, subinfo.identifier)
+					h.SubscribeSession(subinfo.session, subinfo.stream, subinfo.identifier)
 				}
 			case "removeAll":
 				{
-					h.unsubscribeSessionFromChannel(subinfo.session, subinfo.identifier, false)
+					h.UnsubscribeSessionFromChannel(subinfo.session, subinfo.identifier, false)
 				}
 			default:
 				{
-					h.unsubscribeSession(subinfo.session, subinfo.stream, subinfo.identifier)
+					h.UnsubscribeSession(subinfo.session, subinfo.stream, subinfo.identifier)
 				}
 			}
 
@@ -131,12 +137,12 @@ func (h *Hub) Run() {
 }
 
 // AddSession enqueues sessions registration
-func (h *Hub) AddSession(s *Session) {
+func (h *Hub) AddSessionLater(s HubSession) {
 	h.register <- HubRegistration{event: "add", session: s}
 }
 
 // RemoveSession enqueues session un-registration
-func (h *Hub) RemoveSession(s *Session) {
+func (h *Hub) RemoveSessionLater(s HubSession) {
 	h.register <- HubRegistration{event: "remove", session: s}
 }
 
@@ -202,47 +208,53 @@ func (h *Hub) StreamsSize() int {
 	return len(h.streams)
 }
 
-func (h *Hub) addSession(session *Session) {
+func (h *Hub) AddSession(session HubSession) {
 	h.sessionsMu.Lock()
 	defer h.sessionsMu.Unlock()
 
-	h.sessions[session.UID] = session
+	uid := session.GetID()
+	identifiers := session.GetIdentifiers()
 
-	if _, ok := h.identifiers[session.Identifiers]; !ok {
-		h.identifiers[session.Identifiers] = make(map[string]bool)
+	h.sessions[uid] = session
+
+	if _, ok := h.identifiers[identifiers]; !ok {
+		h.identifiers[identifiers] = make(map[string]bool)
 	}
 
-	h.identifiers[session.Identifiers][session.UID] = true
+	h.identifiers[identifiers][uid] = true
 
-	h.log.WithField("sid", session.UID).Debugf(
+	h.log.WithField("sid", uid).Debugf(
 		"Registered with identifiers: %s",
-		session.Identifiers,
+		identifiers,
 	)
 }
 
-func (h *Hub) removeSession(session *Session) {
+func (h *Hub) RemoveSession(session HubSession) {
 	h.sessionsMu.RLock()
-	if _, ok := h.sessions[session.UID]; !ok {
+	uid := session.GetID()
+
+	if _, ok := h.sessions[uid]; !ok {
 		h.sessionsMu.RUnlock()
-		h.log.WithField("sid", session.UID).Warn("Session hasn't been registered")
+		h.log.WithField("sid", uid).Warn("Session hasn't been registered")
 		return
 	}
 	h.sessionsMu.RUnlock()
 
-	h.unsubscribeSessionFromAllChannels(session.UID)
+	identifiers := session.GetIdentifiers()
+	h.unsubscribeSessionFromAllChannels(uid)
 
 	h.sessionsMu.Lock()
 
-	delete(h.sessions, session.UID)
-	delete(h.identifiers[session.Identifiers], session.UID)
+	delete(h.sessions, uid)
+	delete(h.identifiers[identifiers], uid)
 
-	if len(h.identifiers[session.Identifiers]) == 0 {
-		delete(h.identifiers, session.Identifiers)
+	if len(h.identifiers[identifiers]) == 0 {
+		delete(h.identifiers, identifiers)
 	}
 
 	h.sessionsMu.Unlock()
 
-	h.log.WithField("sid", session.UID).Debug("Unregistered")
+	h.log.WithField("sid", uid).Debug("Unregistered")
 }
 
 func (h *Hub) unsubscribeSessionFromAllChannels(sid string) {
@@ -250,13 +262,13 @@ func (h *Hub) unsubscribeSessionFromAllChannels(sid string) {
 	defer h.streamsMu.Unlock()
 
 	for channel := range h.sessionsStreams[sid] {
-		h.unsubscribeSessionFromChannel(sid, channel, true)
+		h.UnsubscribeSessionFromChannel(sid, channel, true)
 	}
 
 	delete(h.sessionsStreams, sid)
 }
 
-func (h *Hub) unsubscribeSessionFromChannel(sid string, identifier string, locked bool) {
+func (h *Hub) UnsubscribeSessionFromChannel(sid string, identifier string, locked bool) {
 	if !locked {
 		h.streamsMu.Lock()
 		defer h.streamsMu.Unlock()
@@ -284,7 +296,7 @@ func (h *Hub) unsubscribeSessionFromChannel(sid string, identifier string, locke
 	}).Debug("Unsubscribed")
 }
 
-func (h *Hub) subscribeSession(sid string, stream string, identifier string) {
+func (h *Hub) SubscribeSession(sid string, stream string, identifier string) {
 	h.streamsMu.Lock()
 	defer h.streamsMu.Unlock()
 
@@ -314,7 +326,7 @@ func (h *Hub) subscribeSession(sid string, stream string, identifier string) {
 	}).Debug("Subscribed")
 }
 
-func (h *Hub) unsubscribeSession(sid string, stream string, identifier string) {
+func (h *Hub) UnsubscribeSession(sid string, stream string, identifier string) {
 	h.streamsMu.RLock()
 	if _, ok := h.streams[stream]; !ok {
 		h.streamsMu.RUnlock()
@@ -400,7 +412,7 @@ func (h *Hub) disconnectSessions(identifier string, reconnect bool) {
 		return
 	}
 
-	disconnectMessage := newDisconnectMessage(remoteDisconnectReason, reconnect)
+	msg := common.NewDisconnectMessage(common.REMOTE_DISCONNECT_REASON, reconnect)
 
 	h.pool.Schedule(func() {
 		h.sessionsMu.RLock()
@@ -408,14 +420,13 @@ func (h *Hub) disconnectSessions(identifier string, reconnect bool) {
 
 		for id := range ids {
 			if ses, ok := h.sessions[id]; ok {
-				ses.Send(disconnectMessage)
-				ses.Disconnect("Closed remotely", ws.CloseNormalClosure)
+				ses.DisconnectWithMessage(msg, common.REMOTE_DISCONNECT_REASON)
 			}
 		}
 	})
 }
 
-func (h *Hub) findByIdentifier(id string) *Session {
+func (h *Hub) FindByIdentifier(id string) HubSession {
 	h.sessionsMu.RLock()
 	defer h.sessionsMu.RUnlock()
 
@@ -434,13 +445,21 @@ func (h *Hub) findByIdentifier(id string) *Session {
 	return nil
 }
 
+func (h *Hub) DisconnectSesssions(msg encoders.EncodedMessage, code string) {
+	h.sessionsMu.RLock()
+	for _, session := range h.sessions {
+		session.DisconnectWithMessage(msg, code)
+	}
+	h.sessionsMu.RUnlock()
+}
+
 func buildMessage(data string, identifier string) encoders.EncodedMessage {
 	var msg interface{}
 
 	// We ignore JSON deserialization failures and consider the message to be a string
 	json.Unmarshal([]byte(data), &msg) // nolint:errcheck
 
-	return NewCachedEncodedMessage(&common.Reply{Identifier: identifier, Message: msg})
+	return encoders.NewCachedEncodedMessage(&common.Reply{Identifier: identifier, Message: msg})
 }
 
 func streamSessionsSnapshot(src map[string]map[string]bool) map[string][]string {

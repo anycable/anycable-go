@@ -97,6 +97,14 @@ func (s *Session) SetEnv(env *common.SessionEnv) {
 	s.env = env
 }
 
+func (s *Session) GetID() string {
+	return s.UID
+}
+
+func (s *Session) GetIdentifiers() string {
+	return s.Identifiers
+}
+
 // Merge connection and channel states into current env.
 // This method locks the state for writing (so, goroutine-safe)
 func (s *Session) MergeEnv(env *common.SessionEnv) {
@@ -214,6 +222,23 @@ func (s *Session) Disconnect(reason string, code int) {
 	s.disconnectFromNode()
 	s.sendClose(reason, code)
 	s.close()
+}
+
+func (s *Session) DisconnectWithMessage(msg encoders.EncodedMessage, code string) {
+	s.Send(msg)
+
+	reason := ""
+	wsCode := ws.CloseNormalClosure
+
+	switch code {
+	case common.SERVER_RESTART_REASON:
+		reason = "Server restart"
+		wsCode = ws.CloseGoingAway
+	case common.REMOTE_DISCONNECT_REASON:
+		reason = "Closed remotely"
+	}
+
+	s.Disconnect(reason, wsCode)
 }
 
 func (s *Session) disconnectFromNode() {
@@ -362,7 +387,7 @@ func newPingMessage(format string) *common.PingMessage {
 }
 
 func (s *Session) encodeMessage(msg encoders.EncodedMessage) (*ws.SentFrame, error) {
-	if cm, ok := msg.(*CachedEncodedMessage); ok {
+	if cm, ok := msg.(*encoders.CachedEncodedMessage); ok {
 		return cm.Fetch(
 			s.encoder.ID(),
 			func(m encoders.EncodedMessage) (*ws.SentFrame, error) {
