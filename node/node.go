@@ -217,7 +217,7 @@ func (n *Node) Authenticate(s *Session) (res *common.ConnectResult, err error) {
 func (n *Node) Subscribe(s *Session, msg *common.Message) (res *common.CommandResult, err error) {
 	s.smu.Lock()
 
-	if _, ok := s.subscriptions[msg.Identifier]; ok {
+	if ok := s.subscriptions.HasChannel(msg.Identifier); ok {
 		s.smu.Unlock()
 		err = fmt.Errorf("Already subscribed to %s", msg.Identifier)
 		return
@@ -230,7 +230,7 @@ func (n *Node) Subscribe(s *Session, msg *common.Message) (res *common.CommandRe
 			s.Log.Errorf("Subscribe error: %v", err)
 		}
 	} else {
-		s.subscriptions[msg.Identifier] = true
+		s.subscriptions.AddChannel(msg.Identifier)
 		s.Log.Debugf("Subscribed to channel: %s", msg.Identifier)
 	}
 
@@ -247,7 +247,7 @@ func (n *Node) Subscribe(s *Session, msg *common.Message) (res *common.CommandRe
 func (n *Node) Unsubscribe(s *Session, msg *common.Message) (res *common.CommandResult, err error) {
 	s.smu.Lock()
 
-	if _, ok := s.subscriptions[msg.Identifier]; !ok {
+	if ok := s.subscriptions.HasChannel(msg.Identifier); !ok {
 		s.smu.Unlock()
 		err = fmt.Errorf("Unknown subscription %s", msg.Identifier)
 		return
@@ -263,7 +263,7 @@ func (n *Node) Unsubscribe(s *Session, msg *common.Message) (res *common.Command
 		// Make sure to remove all streams subscriptions
 		res.StopAllStreams = true
 
-		delete(s.subscriptions, msg.Identifier)
+		s.subscriptions.RemoveChannel(msg.Identifier)
 
 		s.Log.Debugf("Unsubscribed from channel: %s", msg.Identifier)
 	}
@@ -281,7 +281,7 @@ func (n *Node) Unsubscribe(s *Session, msg *common.Message) (res *common.Command
 func (n *Node) Perform(s *Session, msg *common.Message) (res *common.CommandResult, err error) {
 	s.smu.Lock()
 
-	if _, ok := s.subscriptions[msg.Identifier]; !ok {
+	if ok := s.subscriptions.HasChannel(msg.Identifier); !ok {
 		s.smu.Unlock()
 		err = fmt.Errorf("Unknown subscription %s", msg.Identifier)
 		return
@@ -328,7 +328,7 @@ func (n *Node) Disconnect(s *Session) error {
 
 // DisconnectNow execute disconnect on controller
 func (n *Node) DisconnectNow(s *Session) error {
-	sessionSubscriptions := subscriptionsList(s.subscriptions)
+	sessionSubscriptions := s.subscriptions.Channels()
 
 	ids := s.GetIdentifiers()
 
@@ -455,15 +455,4 @@ func (n *Node) registerMetrics() {
 
 	n.Metrics.RegisterCounter(metricsDataSent, "The total amount of bytes sent to clients")
 	n.Metrics.RegisterCounter(metricsDataReceived, "The total amount of bytes received from clients")
-}
-
-func subscriptionsList(m map[string]bool) []string {
-	keys := make([]string, len(m))
-	i := 0
-
-	for k := range m {
-		keys[i] = k
-		i++
-	}
-	return keys
 }

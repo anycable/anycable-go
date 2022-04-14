@@ -143,3 +143,45 @@ func TestMergeEnv(t *testing.T) {
 	assert.Equal(t, "z", origEnv.GetChannelStateField("test_channel", "a"))
 	assert.Equal(t, "time", origEnv.GetChannelStateField("another_channel", "wasting"))
 }
+
+func TestSubscriptionStateChannels(t *testing.T) {
+	t.Run("with different channels", func(t *testing.T) {
+		subscriptions := NewSubscriptionState()
+
+		subscriptions.AddChannel("{\"channel\":\"SystemNotificationChannel\"}")
+		subscriptions.AddChannel("{\"channel\":\"DressageChannel\",\"id\":23376}")
+
+		expected := []string{
+			"{\"channel\":\"SystemNotificationChannel\"}",
+			"{\"channel\":\"DressageChannel\",\"id\":23376}",
+		}
+
+		actual := subscriptions.Channels()
+
+		for _, key := range expected {
+			assert.Contains(t, actual, key)
+		}
+	})
+
+	t.Run("with the same channel", func(t *testing.T) {
+		subscriptions := NewSubscriptionState()
+
+		subscriptions.AddChannel(
+			"{\"channel\":\"GraphqlChannel\",\"channelId\":\"165d8949069\"}",
+		)
+		subscriptions.AddChannel(
+			"{\"channel\":\"GraphqlChannel\",\"channelId\":\"165d8941e62\"}",
+		)
+
+		expected := []string{
+			"{\"channel\":\"GraphqlChannel\",\"channelId\":\"165d8949069\"}",
+			"{\"channel\":\"GraphqlChannel\",\"channelId\":\"165d8941e62\"}",
+		}
+
+		actual := subscriptions.Channels()
+
+		for _, key := range expected {
+			assert.Contains(t, actual, key)
+		}
+	})
+}

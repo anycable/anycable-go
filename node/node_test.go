@@ -82,7 +82,7 @@ func TestSubscribe(t *testing.T) {
 		assert.Nil(t, err, "Error must be nil")
 
 		// Adds subscription to session
-		assert.Contains(t, session.subscriptions, "test_channel", "Session subscription must be set")
+		assert.Truef(t, session.subscriptions.HasChannel("test_channel"), "Session subscription must be set")
 
 		msg, err := session.conn.Read()
 		assert.Nil(t, err)
@@ -98,7 +98,7 @@ func TestSubscribe(t *testing.T) {
 		assert.Nil(t, err, "Error must be nil")
 
 		// Adds subscription to session
-		assert.Contains(t, session.subscriptions, "with_stream", "Session subsription must be set")
+		assert.Truef(t, session.subscriptions.HasChannel("with_stream"), "Session subsription must be set")
 
 		msg, err := session.conn.Read()
 		assert.Nil(t, err)
@@ -135,14 +135,14 @@ func TestUnsubscribe(t *testing.T) {
 	session := NewMockSession("14", &node)
 
 	t.Run("Successful unsubscribe", func(t *testing.T) {
-		session.subscriptions["test_channel"] = true
+		session.subscriptions.AddChannel("test_channel")
 		node.hub.SubscribeSession("14", "streamo", "test_channel")
 
 		_, err := node.Unsubscribe(session, &common.Message{Identifier: "test_channel"})
 		assert.Nil(t, err, "Error must be nil")
 
 		// Removes subscription from session
-		assert.NotContains(t, session.subscriptions, "test_channel", "Shouldn't contain test_channel")
+		assert.Falsef(t, session.subscriptions.HasChannel("test_channel"), "Shouldn't contain test_channel")
 
 		msg, err := session.conn.Read()
 		assert.Nil(t, err)
@@ -157,7 +157,7 @@ func TestUnsubscribe(t *testing.T) {
 	})
 
 	t.Run("Error during unsubscription", func(t *testing.T) {
-		session.subscriptions["failure"] = true
+		session.subscriptions.AddChannel("failure")
 
 		_, err := node.Unsubscribe(session, &common.Message{Identifier: "failure"})
 		assert.NotNil(t, err, "Error must not be nil")
@@ -171,7 +171,7 @@ func TestPerform(t *testing.T) {
 
 	session := NewMockSession("14", &node)
 
-	session.subscriptions["test_channel"] = true
+	session.subscriptions.AddChannel("test_channel")
 	node.hub.SubscribeSession("14", "streamo", "test_channel")
 
 	t.Run("Successful perform", func(t *testing.T) {
@@ -196,7 +196,7 @@ func TestPerform(t *testing.T) {
 	})
 
 	t.Run("Error during perform", func(t *testing.T) {
-		session.subscriptions["failure"] = true
+		session.subscriptions.AddChannel("failure")
 
 		_, err := node.Perform(session, &common.Message{Identifier: "failure", Data: "test"})
 		assert.NotNil(t, err, "Error must not be nil")
@@ -308,54 +308,6 @@ func TestLookupSession(t *testing.T) {
 	node.hub.AddSession(session)
 
 	assert.Equal(t, session, node.LookupSession("{\"foo\":\"bar\"}"))
-}
-
-func TestSubscriptionsList(t *testing.T) {
-	t.Run("with different channels", func(t *testing.T) {
-		subscriptions := map[string]bool{
-			"{\"channel\":\"SystemNotificationChannel\"}":              true,
-			"{\"channel\":\"ClassSectionTableChannel\",\"id\":288528}": true,
-			"{\"channel\":\"ScheduleChannel\",\"id\":23376}":           true,
-			"{\"channel\":\"DressageChannel\",\"id\":23376}":           true,
-			"{\"channel\":\"TimekeepingChannel\",\"id\":23376}":        true,
-			"{\"channel\":\"ClassSectionChannel\",\"id\":288528}":      true,
-		}
-
-		expected := []string{
-			"{\"channel\":\"SystemNotificationChannel\"}",
-			"{\"channel\":\"ClassSectionTableChannel\",\"id\":288528}",
-			"{\"channel\":\"ScheduleChannel\",\"id\":23376}",
-			"{\"channel\":\"DressageChannel\",\"id\":23376}",
-			"{\"channel\":\"TimekeepingChannel\",\"id\":23376}",
-			"{\"channel\":\"ClassSectionChannel\",\"id\":288528}",
-		}
-
-		actual := subscriptionsList(subscriptions)
-
-		for _, key := range expected {
-			assert.Contains(t, actual, key)
-		}
-	})
-
-	t.Run("with the same channel", func(t *testing.T) {
-		subscriptions := map[string]bool{
-			"{\"channel\":\"GraphqlChannel\",\"channelId\":\"165d8949069\"}": true,
-			"{\"channel\":\"GraphqlChannel\",\"channelId\":\"165d8941e62\"}": true,
-			"{\"channel\":\"GraphqlChannel\",\"channelId\":\"165d8942db1\"}": true,
-		}
-
-		expected := []string{
-			"{\"channel\":\"GraphqlChannel\",\"channelId\":\"165d8949069\"}",
-			"{\"channel\":\"GraphqlChannel\",\"channelId\":\"165d8941e62\"}",
-			"{\"channel\":\"GraphqlChannel\",\"channelId\":\"165d8942db1\"}",
-		}
-
-		actual := subscriptionsList(subscriptions)
-
-		for _, key := range expected {
-			assert.Contains(t, actual, key)
-		}
-	})
 }
 
 func toJSON(msg encoders.EncodedMessage) []byte {

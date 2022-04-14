@@ -20,6 +20,38 @@ type Executor interface {
 	HandleCommand(*Session, *common.Message) error
 }
 
+type SubscriptionState struct {
+	channels map[string]struct{}
+}
+
+func NewSubscriptionState() *SubscriptionState {
+	return &SubscriptionState{channels: make(map[string]struct{})}
+}
+
+func (st *SubscriptionState) HasChannel(id string) bool {
+	_, ok := st.channels[id]
+	return ok
+}
+
+func (st *SubscriptionState) AddChannel(id string) {
+	st.channels[id] = struct{}{}
+}
+
+func (st *SubscriptionState) RemoveChannel(id string) {
+	delete(st.channels, id)
+}
+
+func (st *SubscriptionState) Channels() []string {
+	keys := make([]string, len(st.channels))
+	i := 0
+
+	for k := range st.channels {
+		keys[i] = k
+		i++
+	}
+	return keys
+}
+
 // Session represents active client
 type Session struct {
 	node          *Node
@@ -28,7 +60,7 @@ type Session struct {
 	encoder       encoders.Encoder
 	executor      Executor
 	env           *common.SessionEnv
-	subscriptions map[string]bool
+	subscriptions *SubscriptionState
 	closed        bool
 
 	// Main mutex (for read/write and important session updates)
@@ -55,7 +87,7 @@ func NewSession(node *Node, conn Connection, url string, headers *map[string]str
 		node:                   node,
 		conn:                   conn,
 		env:                    common.NewSessionEnv(url, headers),
-		subscriptions:          make(map[string]bool),
+		subscriptions:          NewSubscriptionState(),
 		sendCh:                 make(chan *ws.SentFrame, 256),
 		closed:                 false,
 		Connected:              false,

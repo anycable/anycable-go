@@ -108,7 +108,7 @@ func NewMockSession(uid string, node *Node) *Session {
 		closed:        true,
 		uid:           uid,
 		Log:           log.WithField("sid", uid),
-		subscriptions: make(map[string]bool),
+		subscriptions: NewSubscriptionState(),
 		env:           common.NewSessionEnv("/cable-test", &map[string]string{}),
 		sendCh:        make(chan *ws.SentFrame, 256),
 		encoder:       encoders.JSON{},
