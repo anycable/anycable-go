@@ -21,7 +21,7 @@ const (
 	DisconnectType = "disconnect"
 	ConfirmedType  = "confirm_subscription"
 	RejectedType   = "reject_subscription"
-	// Not suppurted by Action Cable currently
+	// Not supported by Action Cable currently
 	UnsubscribedType = "unsubscribed"
 )
 
@@ -32,10 +32,12 @@ const (
 )
 
 // SessionEnv represents the underlying HTTP connection data:
-// URL and request headers
+// URL and request headers.
+// It also carries channel and connection state information used by the RPC app.
 type SessionEnv struct {
 	URL             string
 	Headers         *map[string]string
+	Identifiers     string
 	ConnectionState *map[string]string
 	ChannelStates   *map[string]map[string]string
 }

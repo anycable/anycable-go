@@ -24,11 +24,13 @@ type Executor interface {
 type Session struct {
 	node          *Node
 	conn          Connection
+	uid           string
 	encoder       encoders.Encoder
 	executor      Executor
 	env           *common.SessionEnv
 	subscriptions map[string]bool
 	closed        bool
+
 	// Main mutex (for read/write and important session updates)
 	mu sync.Mutex
 	// Mutex for protocol-related state (env, subscriptions)
@@ -41,9 +43,7 @@ type Session struct {
 
 	pingTimestampPrecision string
 
-	UID         string
-	Identifiers string
-	Connected   bool
+	Connected bool
 	// Could be used to store arbitrary data within a session
 	InternalState map[string]interface{}
 	Log           *log.Entry
@@ -67,10 +67,10 @@ func NewSession(node *Node, conn Connection, url string, headers *map[string]str
 		executor: node,
 	}
 
-	session.UID = uid
+	session.uid = uid
 
 	ctx := node.log.WithFields(log.Fields{
-		"sid": session.UID,
+		"sid": session.uid,
 	})
 
 	session.Log = ctx
@@ -98,11 +98,15 @@ func (s *Session) SetEnv(env *common.SessionEnv) {
 }
 
 func (s *Session) GetID() string {
-	return s.UID
+	return s.uid
 }
 
 func (s *Session) GetIdentifiers() string {
-	return s.Identifiers
+	return s.env.Identifiers
+}
+
+func (s *Session) SetIdentifiers(ids string) {
+	s.env.Identifiers = ids
 }
 
 // Merge connection and channel states into current env.

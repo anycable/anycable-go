@@ -21,7 +21,7 @@ func TestAuthenticate(t *testing.T) {
 
 		assert.Nil(t, err, "Error must be nil")
 		assert.Equal(t, true, session.Connected, "Session must be marked as connected")
-		assert.Equalf(t, "test_id", session.Identifiers, "Identifiers must be equal to %s", "test_id")
+		assert.Equalf(t, "test_id", session.GetIdentifiers(), "Identifiers must be equal to %s", "test_id")
 
 		msg, err := session.conn.Read()
 		assert.Nil(t, err)
@@ -304,7 +304,7 @@ func TestLookupSession(t *testing.T) {
 	assert.Nil(t, node.LookupSession("{\"foo\":\"bar\"}"))
 
 	session := NewMockSession("14", &node)
-	session.Identifiers = "{\"foo\":\"bar\"}"
+	session.SetIdentifiers("{\"foo\":\"bar\"}")
 	node.hub.AddSession(session)
 
 	assert.Equal(t, session, node.LookupSession("{\"foo\":\"bar\"}"))

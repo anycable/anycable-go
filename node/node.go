@@ -188,7 +188,7 @@ func (n *Node) Shutdown() (err error) {
 // Authenticate calls controller to perform authentication.
 // If authentication is successful, session is registered with a hub.
 func (n *Node) Authenticate(s *Session) (res *common.ConnectResult, err error) {
-	res, err = n.controller.Authenticate(s.UID, s.env)
+	res, err = n.controller.Authenticate(s.GetID(), s.env)
 
 	if err != nil {
 		s.Disconnect("Auth Error", ws.CloseInternalServerErr)
@@ -196,7 +196,7 @@ func (n *Node) Authenticate(s *Session) (res *common.ConnectResult, err error) {
 	}
 
 	if res.Status == common.SUCCESS {
-		s.Identifiers = res.Identifier
+		s.SetIdentifiers(res.Identifier)
 		s.Connected = true
 
 		n.hub.AddSession(s)
@@ -223,7 +223,7 @@ func (n *Node) Subscribe(s *Session, msg *common.Message) (res *common.CommandRe
 		return
 	}
 
-	res, err = n.controller.Subscribe(s.UID, s.env, s.Identifiers, msg.Identifier)
+	res, err = n.controller.Subscribe(s.GetID(), s.env, s.GetIdentifiers(), msg.Identifier)
 
 	if err != nil {
 		if res == nil || res.Status == common.ERROR {
@@ -253,7 +253,7 @@ func (n *Node) Unsubscribe(s *Session, msg *common.Message) (res *common.Command
 		return
 	}
 
-	res, err = n.controller.Unsubscribe(s.UID, s.env, s.Identifiers, msg.Identifier)
+	res, err = n.controller.Unsubscribe(s.GetID(), s.env, s.GetIdentifiers(), msg.Identifier)
 
 	if err != nil {
 		if res == nil || res.Status == common.ERROR {
@@ -296,7 +296,7 @@ func (n *Node) Perform(s *Session, msg *common.Message) (res *common.CommandResu
 		return
 	}
 
-	res, err = n.controller.Perform(s.UID, s.env, s.Identifiers, msg.Identifier, data)
+	res, err = n.controller.Perform(s.GetID(), s.env, s.GetIdentifiers(), msg.Identifier, data)
 
 	if err != nil {
 		if res == nil || res.Status == common.ERROR {
@@ -330,12 +330,14 @@ func (n *Node) Disconnect(s *Session) error {
 func (n *Node) DisconnectNow(s *Session) error {
 	sessionSubscriptions := subscriptionsList(s.subscriptions)
 
-	s.Log.Debugf("Disconnect %s %s %v %v", s.Identifiers, s.env.URL, s.env.Headers, sessionSubscriptions)
+	ids := s.GetIdentifiers()
+
+	s.Log.Debugf("Disconnect %s %s %v %v", ids, s.env.URL, s.env.Headers, sessionSubscriptions)
 
 	err := n.controller.Disconnect(
-		s.UID,
+		s.GetID(),
 		s.env,
-		s.Identifiers,
+		ids,
 		sessionSubscriptions,
 	)
 
@@ -364,17 +366,19 @@ func (n *Node) handleCommandReply(s *Session, msg *common.Message, reply *common
 		defer s.Disconnect("Command Failed", ws.CloseAbnormalClosure)
 	}
 
+	uid := s.GetID()
+
 	if reply.StopAllStreams {
-		n.hub.RemoveAllSubscriptions(s.UID, msg.Identifier)
+		n.hub.RemoveAllSubscriptions(uid, msg.Identifier)
 	} else if reply.StoppedStreams != nil {
 		for _, stream := range reply.StoppedStreams {
-			n.hub.RemoveSubscription(s.UID, msg.Identifier, stream)
+			n.hub.RemoveSubscription(uid, msg.Identifier, stream)
 		}
 	}
 
 	if reply.Streams != nil {
 		for _, stream := range reply.Streams {
-			n.hub.SubscribeSession(s.UID, stream, msg.Identifier)
+			n.hub.SubscribeSession(uid, stream, msg.Identifier)
 		}
 	}
 
