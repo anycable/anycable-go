@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/anycable/anycable-go/broker"
 	"github.com/anycable/anycable-go/common"
 	"github.com/anycable/anycable-go/hub"
 	"github.com/anycable/anycable-go/metrics"
@@ -59,6 +60,7 @@ type Node struct {
 
 	config       *Config
 	hub          *hub.Hub
+	broker       broker.Broker
 	controller   Controller
 	disconnector Disconnector
 	shutdownCh   chan struct{}
@@ -77,6 +79,7 @@ func NewNode(controller Controller, metrics *metrics.Metrics, config *Config) *N
 		log:        log.WithFields(log.Fields{"context": "node"}),
 	}
 
+	node.broker = broker.NewLegacyBroker(node)
 	node.hub = hub.NewHub(config.HubGopoolSize)
 
 	node.registerMetrics()
@@ -89,6 +92,10 @@ func (n *Node) Start() error {
 	go n.hub.Run()
 	go n.collectStats()
 
+	if err := n.broker.Start(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -97,10 +104,14 @@ func (n *Node) SetDisconnector(d Disconnector) {
 	n.disconnector = d
 }
 
+func (n *Node) SetBroker(b broker.Broker) {
+	n.broker = b
+}
+
 // HandleCommand parses incoming message from client and
 // execute the command (if recognized)
 func (n *Node) HandleCommand(s *Session, msg *common.Message) (err error) {
-	s.Log.Debugf("Incoming message: %s", msg)
+	s.Log.Debugf("Incoming message: %v", msg)
 	switch msg.Command {
 	case "subscribe":
 		_, err = n.Subscribe(s, msg)
@@ -127,7 +138,7 @@ func (n *Node) HandlePubSub(raw []byte) {
 
 	switch v := msg.(type) {
 	case common.StreamMessage:
-		n.Broadcast(&v)
+		n.broker.HandleBroadcast(&v)
 	case common.RemoteDisconnectMessage:
 		n.RemoteDisconnect(&v)
 	}
@@ -239,6 +250,11 @@ func (n *Node) Subscribe(s *Session, msg *common.Message) (res *common.CommandRe
 	if res != nil {
 		n.handleCommandReply(s, msg, res)
 	}
+
+	// TODO: Implement me
+	// if msg.History != nil {
+	// 	return n.History(s, msg)
+	// }
 
 	return
 }
@@ -369,16 +385,21 @@ func (n *Node) handleCommandReply(s *Session, msg *common.Message, reply *common
 	uid := s.GetID()
 
 	if reply.StopAllStreams {
-		n.hub.RemoveAllSubscriptions(uid, msg.Identifier)
+		removedStreams := n.hub.UnsubscribeSessionFromChannel(uid, msg.Identifier)
+		for _, stream := range removedStreams {
+			n.broker.Unsubscribe(stream)
+		}
 	} else if reply.StoppedStreams != nil {
 		for _, stream := range reply.StoppedStreams {
-			n.hub.RemoveSubscription(uid, msg.Identifier, stream)
+			streamId := n.broker.Unsubscribe(stream)
+			n.hub.RemoveSubscription(uid, msg.Identifier, streamId)
 		}
 	}
 
 	if reply.Streams != nil {
 		for _, stream := range reply.Streams {
-			n.hub.SubscribeSession(uid, stream, msg.Identifier)
+			streamId := n.broker.Subscribe(stream)
+			n.hub.SubscribeSession(uid, streamId, msg.Identifier)
 		}
 	}
 

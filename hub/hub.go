@@ -115,7 +115,7 @@ func (h *Hub) Run() {
 				}
 			case "removeAll":
 				{
-					h.UnsubscribeSessionFromChannel(subinfo.session, subinfo.identifier, false)
+					h.unsubscribeSessionFromChannel(subinfo.session, subinfo.identifier, false)
 				}
 			default:
 				{
@@ -124,7 +124,7 @@ func (h *Hub) Run() {
 			}
 
 		case message := <-h.broadcast:
-			h.broadcastToStream(message.Stream, message.Data)
+			h.broadcastToStream(message)
 
 		case command := <-h.disconnect:
 			h.disconnectSessions(command.Identifier, command.Reconnect)
@@ -262,23 +262,31 @@ func (h *Hub) unsubscribeSessionFromAllChannels(sid string) {
 	defer h.streamsMu.Unlock()
 
 	for channel := range h.sessionsStreams[sid] {
-		h.UnsubscribeSessionFromChannel(sid, channel, true)
+		h.unsubscribeSessionFromChannel(sid, channel, true)
 	}
 
 	delete(h.sessionsStreams, sid)
 }
 
-func (h *Hub) UnsubscribeSessionFromChannel(sid string, identifier string, locked bool) {
+func (h *Hub) UnsubscribeSessionFromChannel(sid string, identifier string) []string {
+	return h.unsubscribeSessionFromChannel(sid, identifier, false)
+}
+
+func (h *Hub) unsubscribeSessionFromChannel(sid string, identifier string, locked bool) []string {
 	if !locked {
 		h.streamsMu.Lock()
 		defer h.streamsMu.Unlock()
 	}
 
 	if _, ok := h.sessionsStreams[sid]; !ok {
-		return
+		return nil
 	}
 
+	deletedStreams := []string{}
+
 	for _, stream := range h.sessionsStreams[sid][identifier] {
+		deletedStreams = append(deletedStreams, stream)
+
 		delete(h.streams[stream][sid], identifier)
 
 		if len(h.streams[stream][sid]) == 0 {
@@ -294,6 +302,8 @@ func (h *Hub) UnsubscribeSessionFromChannel(sid string, identifier string, locke
 		"sid":     sid,
 		"channel": identifier,
 	}).Debug("Unsubscribed")
+
+	return deletedStreams
 }
 
 func (h *Hub) SubscribeSession(sid string, stream string, identifier string) {
@@ -357,10 +367,12 @@ func (h *Hub) UnsubscribeSession(sid string, stream string, identifier string) {
 	}).Debug("Unsubscribed")
 }
 
-func (h *Hub) broadcastToStream(stream string, data string) {
+func (h *Hub) broadcastToStream(streamMsg *common.StreamMessage) {
+	stream := streamMsg.Stream
+
 	ctx := h.log.WithField("stream", stream)
 
-	ctx.Debugf("Broadcast message: %s", data)
+	ctx.Debugf("Broadcast message: %v", streamMsg)
 
 	h.streamsMu.RLock()
 	if _, ok := h.streams[stream]; !ok {
@@ -392,7 +404,7 @@ func (h *Hub) broadcastToStream(stream string, data string) {
 				if msg, ok := buf[id]; ok {
 					bdata = msg
 				} else {
-					bdata = buildMessage(data, id)
+					bdata = buildMessage(streamMsg, id)
 					buf[id] = bdata
 				}
 
@@ -453,13 +465,28 @@ func (h *Hub) DisconnectSesssions(msg encoders.EncodedMessage, code string) {
 	h.sessionsMu.RUnlock()
 }
 
-func buildMessage(data string, identifier string) encoders.EncodedMessage {
+func buildMessage(streamMsg *common.StreamMessage, identifier string) encoders.EncodedMessage {
+	data := streamMsg.Data
+
 	var msg interface{}
 
 	// We ignore JSON deserialization failures and consider the message to be a string
 	json.Unmarshal([]byte(data), &msg) // nolint:errcheck
 
-	return encoders.NewCachedEncodedMessage(&common.Reply{Identifier: identifier, Message: msg})
+	stream := ""
+
+	// Only include stream if offset/epovh is present
+	if streamMsg.Epoch != "" {
+		stream = streamMsg.Stream
+	}
+
+	return encoders.NewCachedEncodedMessage(&common.Reply{
+		Identifier: identifier,
+		Message:    msg,
+		StreamID:   stream,
+		Offset:     streamMsg.Offset,
+		Epoch:      streamMsg.Epoch,
+	})
 }
 
 func streamSessionsSnapshot(src map[string]map[string]bool) map[string][]string {

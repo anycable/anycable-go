@@ -225,15 +225,42 @@ func TestRemoteDisconnect(t *testing.T) {
 	})
 }
 
+func TestBroadcastMessage(t *testing.T) {
+	hub := NewHub(2)
+
+	go hub.Run()
+	defer hub.Shutdown()
+
+	session := NewMockSession("123")
+	hub.AddSession(session)
+	hub.SubscribeSession("123", "test", "test_channel")
+
+	t.Run("Broadcast without stream data", func(t *testing.T) {
+		hub.BroadcastMessage(&common.StreamMessage{Stream: "test", Data: "\"ciao\""})
+
+		msg, err := session.Read()
+		assert.Nil(t, err)
+		assert.Equal(t, "{\"identifier\":\"test_channel\",\"message\":\"ciao\"}", string(msg))
+	})
+
+	t.Run("Broadcast with stream data", func(t *testing.T) {
+		hub.BroadcastMessage(&common.StreamMessage{Stream: "test", Data: "\"ciao\"", Epoch: "xyz", Offset: 2022})
+
+		msg, err := session.Read()
+		assert.Nil(t, err)
+		assert.Equal(t, "{\"identifier\":\"test_channel\",\"message\":\"ciao\",\"stream_id\":\"test\",\"epoch\":\"xyz\",\"offset\":2022}", string(msg))
+	})
+}
+
 func TestBuildMessageJSON(t *testing.T) {
 	expected := []byte("{\"identifier\":\"chat\",\"message\":{\"text\":\"hello!\"}}")
-	actual := toJSON(buildMessage("{\"text\":\"hello!\"}", "chat"))
+	actual := toJSON(buildMessage(&common.StreamMessage{Data: "{\"text\":\"hello!\"}"}, "chat"))
 	assert.Equal(t, expected, actual)
 }
 
 func TestBuildMessageString(t *testing.T) {
 	expected := []byte("{\"identifier\":\"chat\",\"message\":\"plain string\"}")
-	actual := toJSON(buildMessage("\"plain string\"", "chat"))
+	actual := toJSON(buildMessage(&common.StreamMessage{Data: "\"plain string\""}, "chat"))
 	assert.Equal(t, expected, actual)
 }
 

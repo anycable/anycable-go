@@ -173,17 +173,37 @@ func (c *CommandResult) ToCallResult() *CallResult {
 	return &res
 }
 
+type HistoryPosition struct {
+	Epoch  string `json:"epoch"`
+	Offset uint64 `json:"offset"`
+}
+
+// HistoryRequest represents a client's streams state (offsets) or a timestamp since
+// which we should return the messages for the current streams
+type HistoryRequest struct {
+	// Since is iso8601 formatted date and time (UTC)
+	Since string `json:"since,omitempty"`
+	// Streams contains the information of last offsets/epoch received for a particular stream
+	Streams map[string]HistoryPosition `json:"streams,omitempty"`
+}
+
 // Message represents incoming client message
 type Message struct {
-	Command    string      `json:"command"`
-	Identifier string      `json:"identifier"`
-	Data       interface{} `json:"data"`
+	Command    string         `json:"command"`
+	Identifier string         `json:"identifier"`
+	Data       interface{}    `json:"data"`
+	History    HistoryRequest `json:"history,omitempty"`
 }
 
 // StreamMessage represents a pub/sub message to be sent to stream
 type StreamMessage struct {
 	Stream string `json:"stream"`
 	Data   string `json:"data"`
+
+	// Offset is the position of this message in the stream
+	Offset uint64
+	// Epoch is the uniq ID of the current storage state
+	Epoch string
 }
 
 // RemoteCommandMessage represents a pub/sub message with a remote command (e.g., disconnect)
@@ -228,6 +248,9 @@ type Reply struct {
 	Type       string      `json:"type,omitempty"`
 	Identifier string      `json:"identifier"`
 	Message    interface{} `json:"message,omitempty"`
+	StreamID   string      `json:"stream_id,omitempty"`
+	Epoch      string      `json:"epoch,omitempty"`
+	Offset     uint64      `json:"offset,omitempty"`
 }
 
 func (r *Reply) GetType() string {
