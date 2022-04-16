@@ -119,6 +119,8 @@ func (n *Node) HandleCommand(s *Session, msg *common.Message) (err error) {
 		_, err = n.Unsubscribe(s, msg)
 	case "message":
 		_, err = n.Perform(s, msg)
+	case "history":
+		err = n.History(s, msg)
 	default:
 		err = fmt.Errorf("Unknown command: %s", msg.Command)
 	}
@@ -251,10 +253,9 @@ func (n *Node) Subscribe(s *Session, msg *common.Message) (res *common.CommandRe
 		n.handleCommandReply(s, msg, res)
 	}
 
-	// TODO: Implement me
-	// if msg.History != nil {
-	// 	return n.History(s, msg)
-	// }
+	if msg.History.Since > 0 || msg.History.Streams != nil {
+		return res, n.History(s, msg)
+	}
 
 	return
 }
@@ -329,6 +330,64 @@ func (n *Node) Perform(s *Session, msg *common.Message) (res *common.CommandResu
 	return
 }
 
+// History fetches the stream history for the specified identifier
+func (n *Node) History(s *Session, msg *common.Message) (err error) {
+	s.smu.Lock()
+
+	if ok := s.subscriptions.HasChannel(msg.Identifier); !ok {
+		s.smu.Unlock()
+		err = fmt.Errorf("Unknown subscription %s", msg.Identifier)
+		return
+	}
+
+	subscriptionStreams := s.subscriptions.StreamsFor(msg.Identifier)
+
+	s.smu.Unlock()
+
+	history := msg.History
+
+	if history.Since == 0 && history.Streams == nil {
+		err = fmt.Errorf("History request is missing, got %v", msg)
+		return
+	}
+
+	backlog := []common.StreamMessage{}
+
+	for _, stream := range subscriptionStreams {
+		if history.Streams != nil {
+			pos, ok := history.Streams[stream]
+
+			if ok {
+				streamBacklog, err := n.broker.HistoryFrom(stream, pos.Epoch, pos.Offset)
+
+				if err != nil {
+					return err
+				}
+
+				backlog = append(backlog, streamBacklog...)
+
+				continue
+			}
+		}
+
+		if history.Since > 0 {
+			streamBacklog, err := n.broker.HistorySince(stream, history.Since)
+
+			if err != nil {
+				return err
+			}
+
+			backlog = append(backlog, streamBacklog...)
+		}
+	}
+
+	for _, el := range backlog {
+		s.Send(el.ToReplyFor(msg.Identifier))
+	}
+
+	return
+}
+
 // Broadcast message to stream
 func (n *Node) Broadcast(msg *common.StreamMessage) {
 	n.Metrics.Counter(metricsBroadcastMsg).Inc()
@@ -385,14 +444,18 @@ func (n *Node) handleCommandReply(s *Session, msg *common.Message, reply *common
 	uid := s.GetID()
 
 	if reply.StopAllStreams {
-		removedStreams := n.hub.UnsubscribeSessionFromChannel(uid, msg.Identifier)
+		n.hub.RemoveAllSubscriptions(uid, msg.Identifier)
+		removedStreams := s.subscriptions.RemoveChannelStreams(msg.Identifier)
+
 		for _, stream := range removedStreams {
 			n.broker.Unsubscribe(stream)
 		}
+
 	} else if reply.StoppedStreams != nil {
 		for _, stream := range reply.StoppedStreams {
 			streamId := n.broker.Unsubscribe(stream)
 			n.hub.RemoveSubscription(uid, msg.Identifier, streamId)
+			s.subscriptions.RemoveChannelStream(msg.Identifier, streamId)
 		}
 	}
 
@@ -400,6 +463,7 @@ func (n *Node) handleCommandReply(s *Session, msg *common.Message, reply *common
 		for _, stream := range reply.Streams {
 			streamId := n.broker.Subscribe(stream)
 			n.hub.SubscribeSession(uid, streamId, msg.Identifier)
+			s.subscriptions.AddChannelStream(msg.Identifier, streamId)
 		}
 	}
 

@@ -95,7 +95,7 @@ func TestMessageJSONSerialization(t *testing.T) {
 		"identifier": "test_channel",
 		"data": {"foo": "bar"},
 		"history": {
-			"since": "2022-04-14T21:08:21+02:00",
+			"since": 20202020,
 			"streams": {
 				"1": {
 					"epoch": "test",
@@ -117,7 +117,7 @@ func TestMessageJSONSerialization(t *testing.T) {
 	assert.Equal(t, msg.Command, "subscribe")
 	assert.Equal(t, msg.Identifier, "test_channel")
 	assert.Equal(t, msg.Data.(map[string]interface{}), map[string]interface{}{"foo": "bar"})
-	assert.Equal(t, msg.History.Since, "2022-04-14T21:08:21+02:00")
+	assert.Equal(t, msg.History.Since, 20202020)
 	assert.Equal(t, msg.History.Streams["1"], HistoryPosition{Epoch: "test", Offset: 14})
 	assert.Equal(t, msg.History.Streams["2"], HistoryPosition{Epoch: "test", Offset: 42})
 }

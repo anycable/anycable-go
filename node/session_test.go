@@ -185,3 +185,27 @@ func TestSubscriptionStateChannels(t *testing.T) {
 		}
 	})
 }
+
+func TestSubscriptionStreamsFor(t *testing.T) {
+	subscriptions := NewSubscriptionState()
+
+	subscriptions.AddChannel("chat_1")
+	subscriptions.AddChannel("presence_1")
+
+	subscriptions.AddChannelStream("chat_1", "a")
+	subscriptions.AddChannelStream("chat_1", "b")
+	subscriptions.AddChannelStream("presence_1", "z")
+
+	assert.Contains(t, subscriptions.StreamsFor("chat_1"), "a")
+	assert.Contains(t, subscriptions.StreamsFor("chat_1"), "b")
+	assert.Equal(t, []string{"z"}, subscriptions.StreamsFor("presence_1"))
+
+	subscriptions.RemoveChannelStreams("chat_1")
+	assert.Empty(t, subscriptions.StreamsFor("chat_1"))
+	assert.Equal(t, []string{"z"}, subscriptions.StreamsFor("presence_1"))
+
+	subscriptions.AddChannelStream("presence_1", "y")
+	subscriptions.RemoveChannelStream("presence_1", "z")
+	subscriptions.RemoveChannelStream("presence_1", "t")
+	assert.Equal(t, []string{"y"}, subscriptions.StreamsFor("presence_1"))
+}

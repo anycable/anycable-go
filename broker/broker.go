@@ -1,6 +1,7 @@
 package broker
 
 import (
+	"errors"
 	"sync"
 
 	"github.com/anycable/anycable-go/common"
@@ -58,6 +59,10 @@ type Broker interface {
 	Subscribe(stream string) string
 	// (Maybe) unregisters the stream and return its unique identifier
 	Unsubscribe(stream string) string
+	// Retrieves stream messages from history from the specified offset within the specified epoch
+	HistoryFrom(stream string, epoch string, offset uint64) ([]common.StreamMessage, error)
+	// Retrieves stream messages from history from the specified timestamp
+	HistorySince(stream string, ts int) ([]common.StreamMessage, error)
 }
 
 // LegacyBroker preserves the v1 behaviour while implementing the Broker APIs.
@@ -90,4 +95,12 @@ func (LegacyBroker) Subscribe(stream string) string {
 
 func (LegacyBroker) Unsubscribe(stream string) string {
 	return stream
+}
+
+func (LegacyBroker) HistoryFrom(stream string, epoch string, offset uint64) ([]common.StreamMessage, error) {
+	return nil, errors.New("History not supported")
+}
+
+func (LegacyBroker) HistorySince(stream string, ts int) ([]common.StreamMessage, error) {
+	return nil, errors.New("History not supported")
 }

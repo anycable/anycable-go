@@ -181,8 +181,8 @@ type HistoryPosition struct {
 // HistoryRequest represents a client's streams state (offsets) or a timestamp since
 // which we should return the messages for the current streams
 type HistoryRequest struct {
-	// Since is iso8601 formatted date and time (UTC)
-	Since string `json:"since,omitempty"`
+	// Since is UTC timestamp in ms
+	Since int `json:"since,omitempty"`
 	// Streams contains the information of last offsets/epoch received for a particular stream
 	Streams map[string]HistoryPosition `json:"streams,omitempty"`
 }
@@ -204,6 +204,34 @@ type StreamMessage struct {
 	Offset uint64
 	// Epoch is the uniq ID of the current storage state
 	Epoch string
+}
+
+func (sm *StreamMessage) ToReplyFor(identifier string) *Reply {
+	data := sm.Data
+
+	var msg interface{}
+
+	// We ignore JSON deserialization failures and consider the message to be a string
+	json.Unmarshal([]byte(data), &msg) // nolint:errcheck
+
+	if msg == nil {
+		msg = sm.Data
+	}
+
+	stream := ""
+
+	// Only include stream if offset/epovh is present
+	if sm.Epoch != "" {
+		stream = sm.Stream
+	}
+
+	return &Reply{
+		Identifier: identifier,
+		Message:    msg,
+		StreamID:   stream,
+		Offset:     sm.Offset,
+		Epoch:      sm.Epoch,
+	}
 }
 
 // RemoteCommandMessage represents a pub/sub message with a remote command (e.g., disconnect)

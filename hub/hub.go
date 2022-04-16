@@ -1,7 +1,6 @@
 package hub
 
 import (
-	"encoding/json"
 	"sync"
 
 	"github.com/anycable/anycable-go/common"
@@ -268,25 +267,21 @@ func (h *Hub) unsubscribeSessionFromAllChannels(sid string) {
 	delete(h.sessionsStreams, sid)
 }
 
-func (h *Hub) UnsubscribeSessionFromChannel(sid string, identifier string) []string {
-	return h.unsubscribeSessionFromChannel(sid, identifier, false)
+func (h *Hub) UnsubscribeSessionFromChannel(sid string, identifier string) {
+	h.unsubscribeSessionFromChannel(sid, identifier, false)
 }
 
-func (h *Hub) unsubscribeSessionFromChannel(sid string, identifier string, locked bool) []string {
+func (h *Hub) unsubscribeSessionFromChannel(sid string, identifier string, locked bool) {
 	if !locked {
 		h.streamsMu.Lock()
 		defer h.streamsMu.Unlock()
 	}
 
 	if _, ok := h.sessionsStreams[sid]; !ok {
-		return nil
+		return
 	}
 
-	deletedStreams := []string{}
-
 	for _, stream := range h.sessionsStreams[sid][identifier] {
-		deletedStreams = append(deletedStreams, stream)
-
 		delete(h.streams[stream][sid], identifier)
 
 		if len(h.streams[stream][sid]) == 0 {
@@ -302,8 +297,6 @@ func (h *Hub) unsubscribeSessionFromChannel(sid string, identifier string, locke
 		"sid":     sid,
 		"channel": identifier,
 	}).Debug("Unsubscribed")
-
-	return deletedStreams
 }
 
 func (h *Hub) SubscribeSession(sid string, stream string, identifier string) {
@@ -465,28 +458,8 @@ func (h *Hub) DisconnectSesssions(msg encoders.EncodedMessage, code string) {
 	h.sessionsMu.RUnlock()
 }
 
-func buildMessage(streamMsg *common.StreamMessage, identifier string) encoders.EncodedMessage {
-	data := streamMsg.Data
-
-	var msg interface{}
-
-	// We ignore JSON deserialization failures and consider the message to be a string
-	json.Unmarshal([]byte(data), &msg) // nolint:errcheck
-
-	stream := ""
-
-	// Only include stream if offset/epovh is present
-	if streamMsg.Epoch != "" {
-		stream = streamMsg.Stream
-	}
-
-	return encoders.NewCachedEncodedMessage(&common.Reply{
-		Identifier: identifier,
-		Message:    msg,
-		StreamID:   stream,
-		Offset:     streamMsg.Offset,
-		Epoch:      streamMsg.Epoch,
-	})
+func buildMessage(msg *common.StreamMessage, identifier string) encoders.EncodedMessage {
+	return encoders.NewCachedEncodedMessage(msg.ToReplyFor(identifier))
 }
 
 func streamSessionsSnapshot(src map[string]map[string]bool) map[string][]string {
