@@ -294,7 +294,7 @@ func TestHistory(t *testing.T) {
 		},
 	}
 
-	ts := int(time.Now().Unix())
+	ts := time.Now().Unix()
 
 	t.Run("Successful history with only Since", func(t *testing.T) {
 		broker.ExpectedCalls = []*mock.Call{}
@@ -474,6 +474,127 @@ func TestHistory(t *testing.T) {
 		)
 
 		assert.Error(t, err, "Couldn't restore history")
+	})
+}
+
+func TestRestoreSession(t *testing.T) {
+	node := NewMockNode()
+
+	broker := &mocks.Broker{}
+	node.SetBroker(broker)
+
+	go node.hub.Run()
+	defer node.hub.Shutdown()
+
+	prev_session := NewMockSession("114", &node)
+	prev_session.subscriptions.AddChannel("fruits_channel")
+	prev_session.subscriptions.AddChannelStream("fruits_channel", "arancia")
+	prev_session.subscriptions.AddChannelStream("fruits_channel", "limoni")
+	prev_session.env.MergeConnectionState(&(map[string]string{"tenant_id": "71"}))
+	prev_session.env.MergeChannelState("fruits_channel", &(map[string]string{"gardini": "ischia"}))
+
+	session := NewMockSession("214", &node)
+
+	t.Run("Successful restore via header", func(t *testing.T) {
+		broker.ExpectedCalls = []*mock.Call{}
+
+		broker.
+			On("RetrieveSession", "114", "214").
+			Return(prev_session.ToCacheEntry(), nil)
+
+		session.env.SetHeader("x-anycable-sid", "114")
+
+		res, err := node.Authenticate(session)
+		require.NoError(t, err)
+		assert.Equal(t, common.SUCCESS, res.Status)
+
+		assert.Contains(t, session.subscriptions.StreamsFor("fruits_channel"), "arancia")
+		assert.Contains(t, session.subscriptions.StreamsFor("fruits_channel"), "limoni")
+
+		assert.Equal(t, "71", session.env.GetConnectionStateField("tenant_id"))
+		assert.Equal(t, "ischia", session.env.GetChannelStateField("fruits_channel", "tenant_id"))
+
+		welcome, err := session.conn.Read()
+		require.NoError(t, err)
+
+		require.Equalf(
+			t,
+			`{"type":"welcome","sid":"214","restored":true}`,
+			string(welcome),
+			"Sent message is invalid: %s", welcome,
+		)
+
+		node.hub.Broadcast("arancia", "delissimo")
+
+		msg, err := session.conn.Read()
+		require.NoError(t, err)
+
+		require.Equalf(
+			t,
+			`{"identifiers":"fruits_channel","message":"delissimo"}`,
+			string(msg),
+			"Sent message is invalid: %s", msg,
+		)
+
+		node.hub.Broadcast("limoni", "acido")
+
+		msg, err = session.conn.Read()
+		require.NoError(t, err)
+
+		require.Equalf(
+			t,
+			`{"identifiers":"fruits_channel","message":"acido"}`,
+			string(msg),
+			"Sent message is invalid: %s", msg,
+		)
+	})
+
+	t.Run("Successful restore via url", func(t *testing.T) {
+		broker.ExpectedCalls = []*mock.Call{}
+
+		broker.
+			On("RetrieveSession", "114", "214").
+			Return(prev_session.ToCacheEntry(), nil)
+
+		session.env.URL = "/cable-test?sid=114"
+
+		res, err := node.Authenticate(session)
+		require.NoError(t, err)
+		assert.Equal(t, common.SUCCESS, res.Status)
+
+		welcome, err := session.conn.Read()
+		require.NoError(t, err)
+
+		require.Equalf(
+			t,
+			`{"type":"welcome","sid":"214","restored":true}`,
+			string(welcome),
+			"Sent message is invalid: %s", welcome,
+		)
+	})
+
+	t.Run("Failed to restore", func(t *testing.T) {
+		broker.ExpectedCalls = []*mock.Call{}
+
+		broker.
+			On("RetrieveSession", "114", "214").
+			Return("", nil)
+
+		session.env.SetHeader("x-anycable-sid", "114")
+
+		res, err := node.Authenticate(session)
+		require.NoError(t, err)
+		assert.Equal(t, common.SUCCESS, res.Status)
+
+		welcome, err := session.conn.Read()
+		require.NoError(t, err)
+
+		require.Equalf(
+			t,
+			`{"type":"welcome","sid":"214"}`,
+			string(welcome),
+			"Sent message is invalid: %s", welcome,
+		)
 	})
 }
 

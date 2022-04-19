@@ -18,6 +18,10 @@ type StreamsTracker struct {
 	mu sync.Mutex
 }
 
+func NewStreamsTracker() *StreamsTracker {
+	return &StreamsTracker{store: make(map[string]uint64)}
+}
+
 func (s *StreamsTracker) Add(name string) (isNew bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -28,6 +32,15 @@ func (s *StreamsTracker) Add(name string) (isNew bool) {
 
 	s.store[name]++
 	return false
+}
+
+func (s *StreamsTracker) Has(name string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	_, ok := s.store[name]
+
+	return ok
 }
 
 func (s *StreamsTracker) Remove(name string) (isLast bool) {
@@ -43,6 +56,14 @@ func (s *StreamsTracker) Remove(name string) (isLast bool) {
 	}
 
 	return false
+}
+
+// Cacheable is an interface which a session object must implement
+// to be stored in cache.
+// We use interface and not require a string cache entry to be passed to avoid
+// unnecessary dumping when broker doesn't support storing sessions.
+type Cacheable interface {
+	ToCacheEntry() string
 }
 
 // Broker is responsible for:
@@ -62,7 +83,12 @@ type Broker interface {
 	// Retrieves stream messages from history from the specified offset within the specified epoch
 	HistoryFrom(stream string, epoch string, offset uint64) ([]common.StreamMessage, error)
 	// Retrieves stream messages from history from the specified timestamp
-	HistorySince(stream string, ts int) ([]common.StreamMessage, error)
+	HistorySince(stream string, ts int64) ([]common.StreamMessage, error)
+
+	// Saves session's state in cache
+	CommitSession(sid string, session Cacheable) error
+	// Fetches session's state from cache and remove the entry (to avoid double-read)
+	RestoreSession(from string, to string) (string, error)
 }
 
 // LegacyBroker preserves the v1 behaviour while implementing the Broker APIs.
@@ -101,6 +127,14 @@ func (LegacyBroker) HistoryFrom(stream string, epoch string, offset uint64) ([]c
 	return nil, errors.New("History not supported")
 }
 
-func (LegacyBroker) HistorySince(stream string, ts int) ([]common.StreamMessage, error) {
+func (LegacyBroker) HistorySince(stream string, ts int64) ([]common.StreamMessage, error) {
 	return nil, errors.New("History not supported")
+}
+
+func (LegacyBroker) CommitSession(sid string, session Cacheable) error {
+	return nil
+}
+
+func (LegacyBroker) RestoreSession(from string, to string) (string, error) {
+	return "", nil
 }

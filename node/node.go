@@ -201,7 +201,7 @@ func (n *Node) Shutdown() (err error) {
 // Authenticate calls controller to perform authentication.
 // If authentication is successful, session is registered with a hub.
 func (n *Node) Authenticate(s *Session) (res *common.ConnectResult, err error) {
-	res, err = n.controller.Authenticate(s.GetID(), s.env)
+	res, err = n.restoreOrAuthenticate(s)
 
 	if err != nil {
 		s.Disconnect("Auth Error", ws.CloseInternalServerErr)
@@ -492,6 +492,10 @@ func (n *Node) handleCallReply(s *Session, reply *common.CallResult) {
 	if reply.Transmissions != nil {
 		transmit(s, reply.Transmissions)
 	}
+}
+
+func (n *Node) restoreOrAuthenticate(s *Session) (*common.ConnectResult, error) {
+	return n.controller.Authenticate(s.GetID(), s.env)
 }
 
 func (n *Node) collectStats() {

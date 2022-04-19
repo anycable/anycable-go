@@ -182,7 +182,7 @@ type HistoryPosition struct {
 // which we should return the messages for the current streams
 type HistoryRequest struct {
 	// Since is UTC timestamp in ms
-	Since int `json:"since,omitempty"`
+	Since int64 `json:"since,omitempty"`
 	// Streams contains the information of last offsets/epoch received for a particular stream
 	Streams map[string]HistoryPosition `json:"streams,omitempty"`
 }

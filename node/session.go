@@ -348,6 +348,14 @@ func (s *Session) DisconnectWithMessage(msg encoders.EncodedMessage, code string
 	s.Disconnect(reason, wsCode)
 }
 
+func (s *Session) ToCacheEntry() string {
+	return ""
+}
+
+func SessionFromCache(cached string) *Session {
+	return nil
+}
+
 func (s *Session) disconnectFromNode() {
 	s.mu.Lock()
 	if s.Connected {
