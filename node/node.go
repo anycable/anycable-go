@@ -64,6 +64,7 @@ type Node struct {
 	controller   Controller
 	disconnector Disconnector
 	shutdownCh   chan struct{}
+	stopped      bool
 	log          *log.Entry
 }
 
@@ -154,12 +155,12 @@ func (n *Node) LookupSession(id string) *Session {
 
 // Shutdown stops all services (hub, controller)
 func (n *Node) Shutdown() (err error) {
-	if n.shutdownCh == nil {
+	if n.stopped {
 		return errors.New("Already shut down")
 	}
 
 	close(n.shutdownCh)
-	n.shutdownCh = nil
+	n.stopped = true
 
 	if n.hub != nil {
 		n.hub.Shutdown()

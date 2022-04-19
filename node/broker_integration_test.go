@@ -10,6 +10,7 @@ import (
 	"github.com/anycable/anycable-go/metrics"
 	"github.com/anycable/anycable-go/mocks"
 	"github.com/anycable/anycable-go/ws"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
@@ -38,14 +39,13 @@ import (
 // - Make sure it is not restored (uses controller.Authenticate, doesn't receive any broadcasts)
 func TestIntegrationRestore(t *testing.T) {
 	node, controller := setupIntegrationNode()
-	go node.Start()
-	defer node.Shutdown()
+	go node.Start()       // nolint:errcheck
+	defer node.Shutdown() // nolint:errcheck
 
 	sid := "s18"
 	ids := "user:jack"
 
-	session := NewSession(node, nil, "ws://test.anycable.io/cable", nil, "s18")
-	session.conn = NewMockConnection(session)
+	session := NewMockSessionWithEnv("s18", node, "ws://test.anycable.io/cable", nil)
 
 	controller.
 		On("Authenticate", sid, session.env).
@@ -100,16 +100,15 @@ func TestIntegrationRestore(t *testing.T) {
 		`{"type":"confirm","identifier":"user_jack"}`,
 	)
 
-	node.Broadcast(&common.StreamMessage{Stream: "messages_1", Data: "Alice: Hey!"})
-	requireReceive(t, session, `{"identifier":"chat_1","data":"Alice: Hey!","stream_id":"messages_1","epoch":"2022","offset":1}`)
+	node.HandlePubSub([]byte(`{"stream": "messages_1", "data": "Alice: Hey!"}`))
+	requireReceive(t, session, `{"identifier":"chat_1","message":"Alice: Hey!","stream_id":"messages_1","epoch":"2022","offset":1}`)
 
-	node.Broadcast(&common.StreamMessage{Stream: "u_jack", Data: "New message from Alice"})
-	requireReceive(t, session, `{"identifier":"user_jack","data":"New message from Alice","stream_id":"u_jack","epoch":"2022","offset":1}`)
+	node.HandlePubSub([]byte(`{"stream": "u_jack", "data": "New message from Alice"}`))
+	requireReceive(t, session, `{"identifier":"user_jack","message":"New message from Alice","stream_id":"u_jack","epoch":"2022","offset":1}`)
 
 	session.Disconnect("normal", ws.CloseNormalClosure)
 
-	new_session := NewSession(node, nil, fmt.Sprintf("ws://test.anycable.io/cable?sid=%s", sid), nil, "s21")
-	new_session.conn = NewMockConnection(session)
+	new_session := NewMockSessionWithEnv("s21", node, fmt.Sprintf("ws://test.anycable.io/cable?sid=%s", sid), nil)
 
 	_, err = node.Authenticate(new_session)
 	require.NoError(t, err)
@@ -121,14 +120,14 @@ func TestIntegrationRestore(t *testing.T) {
 	)
 
 	t.Run("Restore hub subscriptions", func(t *testing.T) {
-		node.Broadcast(&common.StreamMessage{Stream: "messages_1", Data: "Lorenzo: Ciao"})
-		requireReceive(t, session, `{"identifier":"chat_1","data":"Lorenzo: Ciao","stream_id":"messages_1","epoch":"2022","offset":2}`)
+		node.HandlePubSub([]byte(`{"stream": "messages_1", "data": "Lorenzo: Ciao"}`))
+		requireReceive(t, session, `{"identifier":"chat_1","message":"Lorenzo: Ciao","stream_id":"messages_1","epoch":"2022","offset":2}`)
 
-		node.Broadcast(&common.StreamMessage{Stream: "presence_1", Data: "@lorenzo:join"})
-		requireReceive(t, session, `{"identifier":"chat_1","data":"@lorenzo:join","stream_id":"presence_1","epoch":"2022","offset":1}`)
+		node.HandlePubSub([]byte(`{"stream": "presence_1", "data": "@lorenzo:join"}`))
+		requireReceive(t, session, `{"identifier":"chat_1","message":"@lorenzo:join","stream_id":"presence_1","epoch":"2022","offset":1}`)
 
-		node.Broadcast(&common.StreamMessage{Stream: "u_jack", Data: "1:1"})
-		requireReceive(t, session, `{"identifier":"user_jack","data":"1:1","stream_id":"u_jack","epoch":"2022","offset":2}`)
+		node.HandlePubSub([]byte(`{"stream": "u_jack", "data": "1:1"}`))
+		requireReceive(t, session, `{"identifier":"user_jack","message":"1:1","stream_id":"u_jack","epoch":"2022","offset":2}`)
 	})
 
 	t.Run("Restore session connection and channels state", func(t *testing.T) {
@@ -144,8 +143,8 @@ func TestIntegrationRestore(t *testing.T) {
 				return res, nil
 			})
 
-		_, err := node.Perform(session, &common.Message{Identifier: "user_jack", Data: "echo", Command: "message"})
-		require.NoError(t, err)
+		_, perr := node.Perform(session, &common.Message{Identifier: "user_jack", Data: "echo", Command: "message"})
+		require.NoError(t, perr)
 
 		requireReceive(t, session, "city:Napoli")
 		requireReceive(t, session, "locale:it")
@@ -160,8 +159,7 @@ func TestIntegrationRestore(t *testing.T) {
 				Transmissions: []string{`{"type":"welcome","restored":false}`},
 			}, nil)
 
-		new_session := NewSession(node, nil, fmt.Sprintf("ws://test.anycable.io/cable?sid=%s", sid), nil, "s42")
-		new_session.conn = NewMockConnection(session)
+		new_session := NewMockSessionWithEnv("s42", node, fmt.Sprintf("ws://test.anycable.io/cable?sid=%s", sid), nil)
 
 		_, err = node.Authenticate(new_session)
 		require.NoError(t, err)
@@ -196,28 +194,30 @@ func TestIntegrationRestore(t *testing.T) {
 //
 func TestIntegrationHistory(t *testing.T) {
 	node, controller := setupIntegrationNode()
-	go node.Start()
-	defer node.Shutdown()
+	go node.Start()       // nolint:errcheck
+	defer node.Shutdown() // nolint:errcheck
 
-	node.Broadcast(&common.StreamMessage{Stream: "messages_1", Data: "Lorenzo: Ciao"})
+	node.HandlePubSub([]byte(`{"stream": "messages_1","data":"Lorenzo: Ciao"}`))
 
 	// Use sleep to make sure Since option works (and we don't want
 	// to hack broker internals to update stream messages timestamps)
 	time.Sleep(2 * time.Second)
 	ts := time.Now().Unix()
 
-	node.Broadcast(&common.StreamMessage{Stream: "messages_1", Data: "Flavia: buona sera"})
+	node.HandlePubSub([]byte(`{"stream": "messages_1","data":"Flavia: buona sera"}`))
+	node.HandlePubSub([]byte(`{"stream": "messages_1","data":"Mario: ta-dam!"}`))
 
-	node.Broadcast(&common.StreamMessage{Stream: "presence_1", Data: "1 new notification"})
-	node.Broadcast(&common.StreamMessage{Stream: "presence_1", Data: "2 new notifications"})
-	node.Broadcast(&common.StreamMessage{Stream: "presence_1", Data: "3 new notifications"})
-	node.Broadcast(&common.StreamMessage{Stream: "presence_1", Data: "4 new notifications"})
+	node.HandlePubSub([]byte(`{"stream": "presence_1","data":"1 new notification"}`))
+	node.HandlePubSub([]byte(`{"stream": "presence_1","data":"2 new notifications"}`))
+	node.HandlePubSub([]byte(`{"stream": "presence_1","data":"3 new notifications"}`))
+	node.HandlePubSub([]byte(`{"stream": "presence_1","data":"4 new notifications"}`))
+	node.HandlePubSub([]byte(`{"stream": "presence_1","data":"100+ new notifications"}`))
 
 	t.Run("Subscribe with history", func(t *testing.T) {
 		session := requireAuthenticatedSession(t, node, "alice")
 
 		controller.
-			On("Subscribe", "alice", mock.Anything, "chat_1").
+			On("Subscribe", "alice", mock.Anything, "alice", "chat_1").
 			Return(&common.CommandResult{
 				Status:        common.SUCCESS,
 				Streams:       []string{"messages_1"},
@@ -236,15 +236,16 @@ func TestIntegrationHistory(t *testing.T) {
 
 		require.NoError(t, err)
 
-		requireReceive(t, session, `{"type":"confirm","identifier":"chat_1"}`)
-		requireReceive(t, session, `{"identifier":"chat_1","data":"Flavia: buona sera","stream_id":"messages_1","epoch":"2022","offset":2}`)
+		assertReceive(t, session, `{"type":"confirm","identifier":"chat_1"}`)
+		assertReceive(t, session, `{"identifier":"chat_1","message":"Flavia: buona sera","stream_id":"messages_1","epoch":"2022","offset":2}`)
+		assertReceive(t, session, `{"identifier":"chat_1","message":"Mario: ta-dam!","stream_id":"messages_1","epoch":"2022","offset":3}`)
 	})
 
 	t.Run("Subscribe + History", func(t *testing.T) {
 		session := requireAuthenticatedSession(t, node, "bob")
 
 		controller.
-			On("Subscribe", "bob", mock.Anything, "chat_1").
+			On("Subscribe", "bob", mock.Anything, "bob", "chat_1").
 			Return(&common.CommandResult{
 				Status:        common.SUCCESS,
 				Streams:       []string{"messages_1", "presence_1"},
@@ -277,8 +278,9 @@ func TestIntegrationHistory(t *testing.T) {
 
 		require.NoError(t, err)
 
-		requireReceive(t, session, `{"identifier":"chat_1","data":"3 new notifications","stream_id":"presence_1","epoch":"2022","offset":3}`)
-		requireReceive(t, session, `{"identifier":"chat_1","data":"4 new notifications","stream_id":"presence_1","epoch":"2022","offset":4}`)
+		assertReceive(t, session, `{"identifier":"chat_1","message":"3 new notifications","stream_id":"presence_1","epoch":"2022","offset":3}`)
+		assertReceive(t, session, `{"identifier":"chat_1","message":"4 new notifications","stream_id":"presence_1","epoch":"2022","offset":4}`)
+		assertReceive(t, session, `{"identifier":"chat_1","message":"100+ new notifications","stream_id":"presence_1","epoch":"2022","offset":5}`)
 	})
 }
 
@@ -293,6 +295,7 @@ func setupIntegrationNode() (*Node, *mocks.Controller) {
 	node.SetDisconnector(NewNoopDisconnector())
 
 	br := broker.NewMemoryBroker(node, broker.NewConfig())
+	br.SetEpoch("2022")
 	node.SetBroker(br)
 
 	return node, controller
@@ -309,9 +312,19 @@ func requireReceive(t *testing.T, s *Session, expected string) {
 	)
 }
 
+func assertReceive(t *testing.T, s *Session, expected string) {
+	msg, err := s.conn.Read()
+	require.NoError(t, err)
+
+	assert.Equal(
+		t,
+		expected,
+		string(msg),
+	)
+}
+
 func requireAuthenticatedSession(t *testing.T, node *Node, sid string) *Session {
-	session := NewSession(node, nil, "ws://test.anycable.io/cable", nil, sid)
-	session.conn = NewMockConnection(session)
+	session := NewMockSessionWithEnv(sid, node, "ws://test.anycable.io/cable", nil)
 
 	controller := node.controller.(*mocks.Controller)
 

@@ -29,6 +29,8 @@ type MockConnection struct {
 	session *Session
 	send    chan []byte
 	closed  bool
+
+	done chan struct{}
 }
 
 func (conn MockConnection) Write(msg []byte, deadline time.Time) error {
@@ -44,24 +46,6 @@ func (conn MockConnection) WriteBinary(msg []byte, deadline time.Time) error {
 func (conn MockConnection) Read() ([]byte, error) {
 	timer := time.After(100 * time.Millisecond)
 
-	done := make(chan struct{}, 1)
-
-	// Lazily retrieve pending session messages
-	go func() {
-		for {
-			select {
-			case <-done:
-				return
-			case frame := <-conn.session.sendCh:
-				conn.session.writeFrame(frame) // nolint:errcheck
-			}
-		}
-	}()
-
-	defer func() {
-		done <- struct{}{}
-	}()
-
 	select {
 	case <-timer:
 		return nil, errors.New("Session hasn't received any messages")
@@ -71,34 +55,38 @@ func (conn MockConnection) Read() ([]byte, error) {
 }
 
 func (conn MockConnection) ReadIndifinitely() []byte {
-	done := make(chan struct{}, 1)
-
-	// Lazily retrieve pending session messages
-	go func() {
-		for {
-			select {
-			case <-done:
-				return
-			case frame := <-conn.session.sendCh:
-				conn.session.writeFrame(frame) // nolint:errcheck
-			}
-		}
-	}()
-
-	defer func() {
-		done <- struct{}{}
-	}()
-
 	msg := <-conn.send
 	return msg
 }
 
 func (conn MockConnection) Close(_code int, _reason string) {
+	conn.done <- struct{}{}
+
 	conn.send <- []byte("")
 }
 
+func (conn MockConnection) read() {
+	for {
+		select {
+		case <-conn.done:
+			return
+		case frame := <-conn.session.sendCh:
+			conn.session.writeFrame(frame) // nolint:errcheck
+		}
+	}
+}
+
 func NewMockConnection(session *Session) MockConnection {
-	return MockConnection{closed: false, send: make(chan []byte, 2), session: session}
+	conn := MockConnection{
+		closed:  false,
+		send:    make(chan []byte, 100),
+		session: session,
+		done:    make(chan struct{}, 1),
+	}
+
+	go conn.read()
+
+	return conn
 }
 
 // NewMockSession returns a new session with a specified uid and identifiers equal to uid

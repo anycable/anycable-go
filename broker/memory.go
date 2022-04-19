@@ -48,6 +48,10 @@ func (ms *memstream) add(data string) uint64 {
 		ms.low = ms.data[0].offset
 	}
 
+	if ms.low == 0 {
+		ms.low = ms.data[0].offset
+	}
+
 	return ms.offset
 }
 
@@ -129,6 +133,14 @@ func NewMemoryBroker(node Broadcaster, config *Config) *Memory {
 	}
 }
 
+func (b *Memory) GetEpoch() string {
+	return b.epoch
+}
+
+func (b *Memory) SetEpoch(v string) {
+	b.epoch = v
+}
+
 func (b *Memory) Start() error {
 	go b.expireLoop()
 
@@ -153,10 +165,14 @@ func (b *Memory) HandleBroadcast(msg *common.StreamMessage) {
 // Registring streams (for granular pub/sub)
 
 func (b *Memory) Subscribe(stream string) string {
+	b.tracker.Add(stream)
+
 	return stream
 }
 
 func (b *Memory) Unsubscribe(stream string) string {
+	b.tracker.Remove(stream)
+
 	return stream
 }
 

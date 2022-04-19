@@ -12,6 +12,39 @@ type Broadcaster interface {
 	Broadcast(msg *common.StreamMessage)
 }
 
+// Cacheable is an interface which a session object must implement
+// to be stored in cache.
+// We use interface and not require a string cache entry to be passed to avoid
+// unnecessary dumping when broker doesn't support storing sessions.
+type Cacheable interface {
+	ToCacheEntry() string
+}
+
+// Broker is responsible for:
+// - Managing streams history.
+// - Keeping client states for recovery.
+// - Distributing broadcasts across nodes.
+type Broker interface {
+	Start() error
+	Shutdown() error
+
+	HandleBroadcast(msg *common.StreamMessage)
+
+	// Registers the stream and returns its (short) unique identifier
+	Subscribe(stream string) string
+	// (Maybe) unregisters the stream and return its unique identifier
+	Unsubscribe(stream string) string
+	// Retrieves stream messages from history from the specified offset within the specified epoch
+	HistoryFrom(stream string, epoch string, offset uint64) ([]common.StreamMessage, error)
+	// Retrieves stream messages from history from the specified timestamp
+	HistorySince(stream string, ts int64) ([]common.StreamMessage, error)
+
+	// Saves session's state in cache
+	CommitSession(sid string, session Cacheable) error
+	// Fetches session's state from cache and remove the entry (to avoid double-read)
+	RestoreSession(from string, to string) (string, error)
+}
+
 type StreamsTracker struct {
 	store map[string]uint64
 
@@ -56,39 +89,6 @@ func (s *StreamsTracker) Remove(name string) (isLast bool) {
 	}
 
 	return false
-}
-
-// Cacheable is an interface which a session object must implement
-// to be stored in cache.
-// We use interface and not require a string cache entry to be passed to avoid
-// unnecessary dumping when broker doesn't support storing sessions.
-type Cacheable interface {
-	ToCacheEntry() string
-}
-
-// Broker is responsible for:
-// - Managing streams history.
-// - Keeping client states for recovery.
-// - Distributing broadcasts across nodes.
-type Broker interface {
-	Start() error
-	Shutdown() error
-
-	HandleBroadcast(msg *common.StreamMessage)
-
-	// Registers the stream and returns its (short) unique identifier
-	Subscribe(stream string) string
-	// (Maybe) unregisters the stream and return its unique identifier
-	Unsubscribe(stream string) string
-	// Retrieves stream messages from history from the specified offset within the specified epoch
-	HistoryFrom(stream string, epoch string, offset uint64) ([]common.StreamMessage, error)
-	// Retrieves stream messages from history from the specified timestamp
-	HistorySince(stream string, ts int64) ([]common.StreamMessage, error)
-
-	// Saves session's state in cache
-	CommitSession(sid string, session Cacheable) error
-	// Fetches session's state from cache and remove the entry (to avoid double-read)
-	RestoreSession(from string, to string) (string, error)
 }
 
 // LegacyBroker preserves the v1 behaviour while implementing the Broker APIs.

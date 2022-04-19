@@ -71,11 +71,13 @@ func TestFromOffset(t *testing.T) {
 		history, err := broker.HistoryFrom("test", broker.epoch, 2)
 		require.NoError(t, err)
 
-		assert.Len(t, history, 2)
-		assert.EqualValues(t, 4, history[0].Offset)
-		assert.Equal(t, "d", history[0].Data)
-		assert.EqualValues(t, 5, history[1].Offset)
-		assert.Equal(t, "e", history[1].Data)
+		assert.Len(t, history, 3)
+		assert.EqualValues(t, 3, history[0].Offset)
+		assert.Equal(t, "c", history[0].Data)
+		assert.EqualValues(t, 4, history[1].Offset)
+		assert.Equal(t, "d", history[1].Data)
+		assert.EqualValues(t, 5, history[2].Offset)
+		assert.Equal(t, "e", history[2].Data)
 	})
 
 	t.Run("With unknown epoch", func(t *testing.T) {
