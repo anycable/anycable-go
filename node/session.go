@@ -1,7 +1,9 @@
 package node
 
 import (
+	"encoding/json"
 	"errors"
+	"net/url"
 	"sync"
 	"time"
 
@@ -13,6 +15,9 @@ import (
 
 const (
 	writeWait = 10 * time.Second
+
+	prevSessionHeader = "x-anycable-restore-sid"
+	prevSessionParam  = "sid"
 )
 
 // Executor handles incoming commands (messages)
@@ -63,6 +68,27 @@ func (st *SubscriptionState) Channels() []string {
 		i++
 	}
 	return keys
+}
+
+func (st *SubscriptionState) ToMap() map[string][]string {
+	st.mu.RLock()
+	defer st.mu.RUnlock()
+
+	res := make(map[string][]string, len(st.channels))
+
+	for k, v := range st.channels {
+		streams := make([]string, len(v))
+
+		i := 0
+		for name := range v {
+			streams[i] = name
+			i++
+		}
+
+		res[k] = streams
+	}
+
+	return res
 }
 
 func (st *SubscriptionState) AddChannelStream(id string, stream string) {
@@ -348,12 +374,83 @@ func (s *Session) DisconnectWithMessage(msg encoders.EncodedMessage, code string
 	s.Disconnect(reason, wsCode)
 }
 
-func (s *Session) ToCacheEntry() string {
-	return ""
+type cacheEntry struct {
+	Identifiers     string                       `json:"ids"`
+	Subscriptions   map[string][]string          `json:"subs"`
+	ConnectionState map[string]string            `json:"cstate"`
+	ChannelsState   map[string]map[string]string `json:"istate"`
 }
 
-func SessionFromCache(cached string) *Session {
+func (s *Session) ToCacheEntry() ([]byte, error) {
+	s.smu.Lock()
+	defer s.smu.Unlock()
+
+	entry := cacheEntry{
+		Identifiers:     s.GetIdentifiers(),
+		Subscriptions:   s.subscriptions.ToMap(),
+		ConnectionState: *s.env.ConnectionState,
+		ChannelsState:   *s.env.ChannelStates,
+	}
+
+	return json.Marshal(&entry)
+}
+
+func (s *Session) RestoreFromCache(cached []byte) error {
+	var entry cacheEntry
+
+	err := json.Unmarshal(cached, &entry)
+
+	if err != nil {
+		return err
+	}
+
+	s.smu.Lock()
+	defer s.smu.Unlock()
+
+	s.SetIdentifiers(entry.Identifiers)
+	s.env.MergeConnectionState(&entry.ConnectionState)
+
+	for k := range entry.ChannelsState {
+		v := entry.ChannelsState[k]
+		s.env.MergeChannelState(k, &v)
+	}
+
+	for k, v := range entry.Subscriptions {
+		s.subscriptions.AddChannel(k)
+
+		for _, stream := range v {
+			s.subscriptions.AddChannelStream(k, stream)
+		}
+	}
+
 	return nil
+}
+
+func (s *Session) PrevSid() (psid string) {
+	if s.env.Headers != nil {
+		if v, ok := (*s.env.Headers)[prevSessionHeader]; ok {
+			psid = v
+			return
+		}
+	}
+
+	u, err := url.Parse(s.env.URL)
+
+	if err != nil {
+		return
+	}
+
+	m, err := url.ParseQuery(u.RawQuery)
+
+	if err != nil {
+		return
+	}
+
+	if v, ok := m[prevSessionParam]; ok {
+		psid = v[0]
+	}
+
+	return
 }
 
 func (s *Session) disconnectFromNode() {

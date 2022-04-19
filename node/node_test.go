@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/anycable/anycable-go/common"
 	"github.com/anycable/anycable-go/encoders"
@@ -122,14 +121,14 @@ func TestSubscribe(t *testing.T) {
 
 	t.Run("Error during subscription", func(t *testing.T) {
 		_, err := node.Subscribe(session, &common.Message{Identifier: "error"})
-		assert.NotNil(t, err, "Error must not be nil")
+		assert.Error(t, err)
 	})
 
 	t.Run("Rejected subscription", func(t *testing.T) {
 		res, err := node.Subscribe(session, &common.Message{Identifier: "failure"})
 
 		assert.Equal(t, common.FAILURE, res.Status)
-		assert.Nil(t, err, "Error must be nil")
+		assert.NoError(t, err)
 	})
 }
 
@@ -166,7 +165,7 @@ func TestUnsubscribe(t *testing.T) {
 		session.subscriptions.AddChannel("failure")
 
 		_, err := node.Unsubscribe(session, &common.Message{Identifier: "failure"})
-		assert.NotNil(t, err, "Error must not be nil")
+		assert.Error(t, err)
 	})
 }
 
@@ -270,6 +269,10 @@ func TestHistory(t *testing.T) {
 	broker := &mocks.Broker{}
 	node.SetBroker(broker)
 
+	broker.
+		On("CommitSession", mock.Anything, mock.Anything).
+		Return(nil)
+
 	go node.hub.Run()
 	defer node.hub.Shutdown()
 
@@ -294,10 +297,10 @@ func TestHistory(t *testing.T) {
 		},
 	}
 
-	ts := time.Now().Unix()
+	var ts int64
 
 	t.Run("Successful history with only Since", func(t *testing.T) {
-		broker.ExpectedCalls = []*mock.Call{}
+		ts = 100200
 
 		broker.
 			On("HistorySince", "streamo", ts).
@@ -339,7 +342,7 @@ func TestHistory(t *testing.T) {
 	})
 
 	t.Run("Successful history with Since and Offset", func(t *testing.T) {
-		broker.ExpectedCalls = []*mock.Call{}
+		ts = 100300
 
 		broker.
 			On("HistoryFrom", "streamo", "test", uint64(20)).
@@ -397,10 +400,10 @@ func TestHistory(t *testing.T) {
 	})
 
 	t.Run("Fetching history with Subscribe", func(t *testing.T) {
-		broker.ExpectedCalls = []*mock.Call{}
+		ts = 100400
 
 		broker.
-			On("HistoryFrom", "streamo", "test", uint64(20)).
+			On("HistoryFrom", "streamo", "test", uint64(21)).
 			Return(stream, nil)
 		broker.
 			On("HistorySince", "s1", ts).
@@ -421,7 +424,7 @@ func TestHistory(t *testing.T) {
 				History: common.HistoryRequest{
 					Since: ts,
 					Streams: map[string]common.HistoryPosition{
-						"streamo": {Epoch: "test", Offset: 20},
+						"streamo": {Epoch: "test", Offset: 21},
 					},
 				},
 			},
@@ -454,7 +457,7 @@ func TestHistory(t *testing.T) {
 	})
 
 	t.Run("Error retrieving history", func(t *testing.T) {
-		broker.ExpectedCalls = []*mock.Call{}
+		ts = 200100
 
 		broker.
 			On("HistorySince", "streamo", ts).
@@ -493,16 +496,23 @@ func TestRestoreSession(t *testing.T) {
 	prev_session.env.MergeConnectionState(&(map[string]string{"tenant_id": "71"}))
 	prev_session.env.MergeChannelState("fruits_channel", &(map[string]string{"gardini": "ischia"}))
 
+	cached, err := prev_session.ToCacheEntry()
+	require.NoError(t, err)
+
+	broker.
+		On("RestoreSession", "114").
+		Return(cached, nil)
+	broker.
+		On("CommitSession", mock.Anything, mock.Anything).
+		Return(nil)
+	broker.
+		On("Subscribe", mock.Anything).
+		Return(func(name string) string { return name })
+
 	session := NewMockSession("214", &node)
 
 	t.Run("Successful restore via header", func(t *testing.T) {
-		broker.ExpectedCalls = []*mock.Call{}
-
-		broker.
-			On("RetrieveSession", "114", "214").
-			Return(prev_session.ToCacheEntry(), nil)
-
-		session.env.SetHeader("x-anycable-sid", "114")
+		session.env.SetHeader("x-anycable-restore-sid", "114")
 
 		res, err := node.Authenticate(session)
 		require.NoError(t, err)
@@ -512,7 +522,7 @@ func TestRestoreSession(t *testing.T) {
 		assert.Contains(t, session.subscriptions.StreamsFor("fruits_channel"), "limoni")
 
 		assert.Equal(t, "71", session.env.GetConnectionStateField("tenant_id"))
-		assert.Equal(t, "ischia", session.env.GetChannelStateField("fruits_channel", "tenant_id"))
+		assert.Equal(t, "ischia", session.env.GetChannelStateField("fruits_channel", "gardini"))
 
 		welcome, err := session.conn.Read()
 		require.NoError(t, err)
@@ -531,7 +541,7 @@ func TestRestoreSession(t *testing.T) {
 
 		require.Equalf(
 			t,
-			`{"identifiers":"fruits_channel","message":"delissimo"}`,
+			`{"identifier":"fruits_channel","message":"delissimo"}`,
 			string(msg),
 			"Sent message is invalid: %s", msg,
 		)
@@ -543,19 +553,13 @@ func TestRestoreSession(t *testing.T) {
 
 		require.Equalf(
 			t,
-			`{"identifiers":"fruits_channel","message":"acido"}`,
+			`{"identifier":"fruits_channel","message":"acido"}`,
 			string(msg),
 			"Sent message is invalid: %s", msg,
 		)
 	})
 
 	t.Run("Successful restore via url", func(t *testing.T) {
-		broker.ExpectedCalls = []*mock.Call{}
-
-		broker.
-			On("RetrieveSession", "114", "214").
-			Return(prev_session.ToCacheEntry(), nil)
-
 		session.env.URL = "/cable-test?sid=114"
 
 		res, err := node.Authenticate(session)
@@ -574,13 +578,13 @@ func TestRestoreSession(t *testing.T) {
 	})
 
 	t.Run("Failed to restore", func(t *testing.T) {
-		broker.ExpectedCalls = []*mock.Call{}
-
 		broker.
-			On("RetrieveSession", "114", "214").
-			Return("", nil)
+			On("RestoreSession", "114").
+			Return(nil, nil)
 
-		session.env.SetHeader("x-anycable-sid", "114")
+		session.env.SetHeader("x-anycable-restore-sid", "114")
+
+		session = NewMockSession("154", &node)
 
 		res, err := node.Authenticate(session)
 		require.NoError(t, err)
@@ -591,7 +595,7 @@ func TestRestoreSession(t *testing.T) {
 
 		require.Equalf(
 			t,
-			`{"type":"welcome","sid":"214"}`,
+			"welcome",
 			string(welcome),
 			"Sent message is invalid: %s", welcome,
 		)

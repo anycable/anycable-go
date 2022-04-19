@@ -202,7 +202,13 @@ func (n *Node) Shutdown() (err error) {
 // Authenticate calls controller to perform authentication.
 // If authentication is successful, session is registered with a hub.
 func (n *Node) Authenticate(s *Session) (res *common.ConnectResult, err error) {
-	res, err = n.restoreOrAuthenticate(s)
+	restored := n.TryRestoreSession(s)
+
+	if restored {
+		return &common.ConnectResult{Status: common.SUCCESS}, nil
+	}
+
+	res, err = n.controller.Authenticate(s.GetID(), s.env)
 
 	if err != nil {
 		s.Disconnect("Auth Error", ws.CloseInternalServerErr)
@@ -224,7 +230,58 @@ func (n *Node) Authenticate(s *Session) (res *common.ConnectResult, err error) {
 
 	n.handleCallReply(s, res.ToCallResult())
 
+	if berr := n.broker.CommitSession(s.GetID(), s); berr != nil {
+		s.Log.Errorf("Failed to persist session in cache: %v", berr)
+	}
+
 	return
+}
+
+func (n *Node) TryRestoreSession(s *Session) (restored bool) {
+	sid := s.GetID()
+	prev_sid := s.PrevSid()
+
+	if prev_sid == "" {
+		return false
+	}
+
+	cached_session, err := n.broker.RestoreSession(prev_sid)
+
+	if err != nil {
+		s.Log.Errorf("Failed to fetch session cache %s: %s", prev_sid, err.Error())
+		return false
+	}
+
+	if cached_session == nil {
+		return false
+	}
+
+	err = s.RestoreFromCache(cached_session)
+
+	if err != nil {
+		s.Log.Errorf("Failed to restore session from cache %s: %s", prev_sid, err.Error())
+		return false
+	}
+
+	s.Connected = true
+	n.hub.AddSession(s)
+
+	// Resubscribe to streams
+	for identifier, channel_streams := range s.subscriptions.channels {
+		for stream := range channel_streams {
+			streamId := n.broker.Subscribe(stream)
+			n.hub.SubscribeSession(sid, streamId, identifier)
+		}
+	}
+
+	// Send welcome message
+	s.Send(&common.Reply{Type: common.WelcomeType, Sid: sid, Restored: true})
+
+	if berr := n.broker.CommitSession(s.GetID(), s); berr != nil {
+		s.Log.Errorf("Failed to persist session in cache: %v", berr)
+	}
+
+	return true
 }
 
 // Subscribe subscribes session to a channel
@@ -252,6 +309,10 @@ func (n *Node) Subscribe(s *Session, msg *common.Message) (res *common.CommandRe
 
 	if res != nil {
 		n.handleCommandReply(s, msg, res)
+	}
+
+	if berr := n.broker.CommitSession(s.GetID(), s); berr != nil {
+		s.Log.Errorf("Failed to persist session in cache: %v", berr)
 	}
 
 	if msg.History.Since > 0 || msg.History.Streams != nil {
@@ -292,6 +353,10 @@ func (n *Node) Unsubscribe(s *Session, msg *common.Message) (res *common.Command
 		n.handleCommandReply(s, msg, res)
 	}
 
+	if berr := n.broker.CommitSession(s.GetID(), s); berr != nil {
+		s.Log.Errorf("Failed to persist session in cache: %v", berr)
+	}
+
 	return
 }
 
@@ -325,7 +390,11 @@ func (n *Node) Perform(s *Session, msg *common.Message) (res *common.CommandResu
 	}
 
 	if res != nil {
-		n.handleCommandReply(s, msg, res)
+		if n.handleCommandReply(s, msg, res) {
+			if berr := n.broker.CommitSession(s.GetID(), s); berr != nil {
+				s.Log.Errorf("Failed to persist session in cache: %v", berr)
+			}
+		}
 	}
 
 	return
@@ -399,6 +468,7 @@ func (n *Node) Broadcast(msg *common.StreamMessage) {
 // Disconnect adds session to disconnector queue and unregister session from hub
 func (n *Node) Disconnect(s *Session) error {
 	n.hub.RemoveSessionLater(s)
+	n.broker.FinishSession(s.GetID()) // nolint:errcheck
 	return n.disconnector.Enqueue(s)
 }
 
@@ -437,7 +507,10 @@ func transmit(s *Session, transmissions []string) {
 	}
 }
 
-func (n *Node) handleCommandReply(s *Session, msg *common.Message, reply *common.CommandResult) {
+func (n *Node) handleCommandReply(s *Session, msg *common.Message, reply *common.CommandResult) bool {
+	// Returns true if any of the subscriptions/channel/connections state has changed
+	isDirty := false
+
 	if reply.Disconnect {
 		defer s.Disconnect("Command Failed", ws.CloseAbnormalClosure)
 	}
@@ -449,10 +522,13 @@ func (n *Node) handleCommandReply(s *Session, msg *common.Message, reply *common
 		removedStreams := s.subscriptions.RemoveChannelStreams(msg.Identifier)
 
 		for _, stream := range removedStreams {
+			isDirty = true
 			n.broker.Unsubscribe(stream)
 		}
 
 	} else if reply.StoppedStreams != nil {
+		isDirty = true
+
 		for _, stream := range reply.StoppedStreams {
 			streamId := n.broker.Unsubscribe(stream)
 			n.hub.RemoveSubscription(uid, msg.Identifier, streamId)
@@ -461,6 +537,8 @@ func (n *Node) handleCommandReply(s *Session, msg *common.Message, reply *common
 	}
 
 	if reply.Streams != nil {
+		isDirty = true
+
 		for _, stream := range reply.Streams {
 			streamId := n.broker.Subscribe(stream)
 			n.hub.SubscribeSession(uid, streamId, msg.Identifier)
@@ -469,16 +547,23 @@ func (n *Node) handleCommandReply(s *Session, msg *common.Message, reply *common
 	}
 
 	if reply.IState != nil {
+		isDirty = true
+
 		s.smu.Lock()
 		s.env.MergeChannelState(msg.Identifier, &reply.IState)
 		s.smu.Unlock()
 	}
 
-	n.handleCallReply(s, reply.ToCallResult())
+	isConnectionDirty := n.handleCallReply(s, reply.ToCallResult())
+	return isDirty || isConnectionDirty
 }
 
-func (n *Node) handleCallReply(s *Session, reply *common.CallResult) {
+func (n *Node) handleCallReply(s *Session, reply *common.CallResult) bool {
+	isDirty := false
+
 	if reply.CState != nil {
+		isDirty = true
+
 		s.smu.Lock()
 		s.env.MergeConnectionState(&reply.CState)
 		s.smu.Unlock()
@@ -493,10 +578,8 @@ func (n *Node) handleCallReply(s *Session, reply *common.CallResult) {
 	if reply.Transmissions != nil {
 		transmit(s, reply.Transmissions)
 	}
-}
 
-func (n *Node) restoreOrAuthenticate(s *Session) (*common.ConnectResult, error) {
-	return n.controller.Authenticate(s.GetID(), s.env)
+	return isDirty
 }
 
 func (n *Node) collectStats() {

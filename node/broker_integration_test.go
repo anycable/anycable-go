@@ -34,9 +34,9 @@ import (
 // - Execute a command which echoes back the states.
 // - Verifies the received messages.
 //
-// TEST 3 — double-restore:
-// - Initiate another session
-// - Make sure it is not restored (uses controller.Authenticate, doesn't receive any broadcasts)
+// TEST 3 — expired cache:
+// - Wait for cache to expire
+// - Make sure it is not restored (uses controller.Authenticate)
 func TestIntegrationRestore(t *testing.T) {
 	node, controller := setupIntegrationNode()
 	go node.Start()       // nolint:errcheck
@@ -45,10 +45,10 @@ func TestIntegrationRestore(t *testing.T) {
 	sid := "s18"
 	ids := "user:jack"
 
-	session := NewMockSessionWithEnv("s18", node, "ws://test.anycable.io/cable", nil)
+	prev_session := NewMockSessionWithEnv(sid, node, "ws://test.anycable.io/cable", nil)
 
 	controller.
-		On("Authenticate", sid, session.env).
+		On("Authenticate", sid, prev_session.env).
 		Return(&common.ConnectResult{
 			Identifier:    ids,
 			Status:        common.SUCCESS,
@@ -56,25 +56,25 @@ func TestIntegrationRestore(t *testing.T) {
 			CState:        map[string]string{"city": "Napoli"},
 		}, nil)
 
-	_, err := node.Authenticate(session)
+	_, err := node.Authenticate(prev_session)
 	require.NoError(t, err)
 
 	requireReceive(
 		t,
-		session,
+		prev_session,
 		`{"type":"welcome"}`,
 	)
 
 	// Subscribe the channels
 	controller.
-		On("Subscribe", sid, session.env, ids, "chat_1").
+		On("Subscribe", sid, prev_session.env, ids, "chat_1").
 		Return(&common.CommandResult{
 			Status:        common.SUCCESS,
 			Transmissions: []string{`{"type":"confirm","identifier":"chat_1"}`},
 			Streams:       []string{"presence_1", "messages_1"},
 		}, nil)
 	controller.
-		On("Subscribe", sid, session.env, ids, "user_jack").
+		On("Subscribe", sid, prev_session.env, ids, "user_jack").
 		Return(&common.CommandResult{
 			Status:        common.SUCCESS,
 			Transmissions: []string{`{"type":"confirm","identifier":"user_jack"}`},
@@ -82,35 +82,35 @@ func TestIntegrationRestore(t *testing.T) {
 			IState:        map[string]string{"locale": "it"},
 		}, nil)
 
-	_, err = node.Subscribe(session, &common.Message{Identifier: "chat_1", Command: "subscribe"})
+	_, err = node.Subscribe(prev_session, &common.Message{Identifier: "chat_1", Command: "subscribe"})
 	require.NoError(t, err)
 
 	requireReceive(
 		t,
-		session,
+		prev_session,
 		`{"type":"confirm","identifier":"chat_1"}`,
 	)
 
-	_, err = node.Subscribe(session, &common.Message{Identifier: "user_jack", Command: "subscribe"})
+	_, err = node.Subscribe(prev_session, &common.Message{Identifier: "user_jack", Command: "subscribe"})
 	require.NoError(t, err)
 
 	requireReceive(
 		t,
-		session,
+		prev_session,
 		`{"type":"confirm","identifier":"user_jack"}`,
 	)
 
 	node.HandlePubSub([]byte(`{"stream": "messages_1", "data": "Alice: Hey!"}`))
-	requireReceive(t, session, `{"identifier":"chat_1","message":"Alice: Hey!","stream_id":"messages_1","epoch":"2022","offset":1}`)
+	requireReceive(t, prev_session, `{"identifier":"chat_1","message":"Alice: Hey!","stream_id":"messages_1","epoch":"2022","offset":1}`)
 
 	node.HandlePubSub([]byte(`{"stream": "u_jack", "data": "New message from Alice"}`))
-	requireReceive(t, session, `{"identifier":"user_jack","message":"New message from Alice","stream_id":"u_jack","epoch":"2022","offset":1}`)
+	requireReceive(t, prev_session, `{"identifier":"user_jack","message":"New message from Alice","stream_id":"u_jack","epoch":"2022","offset":1}`)
 
-	session.Disconnect("normal", ws.CloseNormalClosure)
+	prev_session.Disconnect("normal", ws.CloseNormalClosure)
 
-	new_session := NewMockSessionWithEnv("s21", node, fmt.Sprintf("ws://test.anycable.io/cable?sid=%s", sid), nil)
+	session := NewMockSessionWithEnv("s21", node, fmt.Sprintf("ws://test.anycable.io/cable?sid=%s", sid), nil)
 
-	_, err = node.Authenticate(new_session)
+	_, err = node.Authenticate(session)
 	require.NoError(t, err)
 
 	requireReceive(
@@ -132,16 +132,16 @@ func TestIntegrationRestore(t *testing.T) {
 
 	t.Run("Restore session connection and channels state", func(t *testing.T) {
 		controller.
-			On("Peform", "s21", mock.Anything, ids, "user_jack", "echo").
-			Return(func(sid string, env *common.SessionEnv, ids string, identifier string, data string) (*common.CommandResult, error) {
+			On("Perform", "s21", mock.Anything, ids, "user_jack", "echo").
+			Return(func(sid string, env *common.SessionEnv, ids string, identifier string, data string) *common.CommandResult {
 				res := &common.CommandResult{Status: common.SUCCESS}
 				res.Transmissions = []string{
 					fmt.Sprintf("city:%s", env.GetConnectionStateField("city")),
 					fmt.Sprintf("locale:%s", env.GetChannelStateField("user_jack", "locale")),
 				}
 
-				return res, nil
-			})
+				return res
+			}, nil)
 
 		_, perr := node.Perform(session, &common.Message{Identifier: "user_jack", Data: "echo", Command: "message"})
 		require.NoError(t, perr)
@@ -150,7 +150,7 @@ func TestIntegrationRestore(t *testing.T) {
 		requireReceive(t, session, "locale:it")
 	})
 
-	t.Run("Not restored when has already been restored", func(t *testing.T) {
+	t.Run("Not restored when cache expired", func(t *testing.T) {
 		controller.
 			On("Authenticate", "s42", mock.Anything).
 			Return(&common.ConnectResult{
@@ -161,12 +161,14 @@ func TestIntegrationRestore(t *testing.T) {
 
 		new_session := NewMockSessionWithEnv("s42", node, fmt.Sprintf("ws://test.anycable.io/cable?sid=%s", sid), nil)
 
+		time.Sleep(3 * time.Second)
+
 		_, err = node.Authenticate(new_session)
 		require.NoError(t, err)
 
 		requireReceive(
 			t,
-			session,
+			new_session,
 			`{"type":"welcome","restored":false}`,
 		)
 	})
@@ -294,7 +296,10 @@ func setupIntegrationNode() (*Node, *mocks.Controller) {
 	node := NewNode(controller, metrics.NewMetrics(nil, 10), &config)
 	node.SetDisconnector(NewNoopDisconnector())
 
-	br := broker.NewMemoryBroker(node, broker.NewConfig())
+	bconf := broker.NewConfig()
+	bconf.SessionsTTL = 2
+
+	br := broker.NewMemoryBroker(node, bconf)
 	br.SetEpoch("2022")
 	node.SetBroker(br)
 

@@ -25,6 +25,20 @@ func (_m *Broker) CommitSession(sid string, session broker.Cacheable) error {
 	return r0
 }
 
+// FinishSession provides a mock function with given fields: sid
+func (_m *Broker) FinishSession(sid string) error {
+	ret := _m.Called(sid)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(string) error); ok {
+		r0 = rf(sid)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
 // HandleBroadcast provides a mock function with given fields: msg
 func (_m *Broker) HandleBroadcast(msg *common.StreamMessage) {
 	_m.Called(msg)
@@ -76,20 +90,22 @@ func (_m *Broker) HistorySince(stream string, ts int64) ([]common.StreamMessage,
 	return r0, r1
 }
 
-// RestoreSession provides a mock function with given fields: from, to
-func (_m *Broker) RestoreSession(from string, to string) (string, error) {
-	ret := _m.Called(from, to)
+// RestoreSession provides a mock function with given fields: from
+func (_m *Broker) RestoreSession(from string) ([]byte, error) {
+	ret := _m.Called(from)
 
-	var r0 string
-	if rf, ok := ret.Get(0).(func(string, string) string); ok {
-		r0 = rf(from, to)
+	var r0 []byte
+	if rf, ok := ret.Get(0).(func(string) []byte); ok {
+		r0 = rf(from)
 	} else {
-		r0 = ret.Get(0).(string)
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]byte)
+		}
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(string, string) error); ok {
-		r1 = rf(from, to)
+	if rf, ok := ret.Get(1).(func(string) error); ok {
+		r1 = rf(from)
 	} else {
 		r1 = ret.Error(1)
 	}

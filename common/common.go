@@ -274,11 +274,13 @@ func NewDisconnectMessage(reason string, reconnect bool) *DisconnectMessage {
 // Reply represents an outgoing client message
 type Reply struct {
 	Type       string      `json:"type,omitempty"`
-	Identifier string      `json:"identifier"`
+	Identifier string      `json:"identifier,omitempty"`
 	Message    interface{} `json:"message,omitempty"`
 	StreamID   string      `json:"stream_id,omitempty"`
 	Epoch      string      `json:"epoch,omitempty"`
 	Offset     uint64      `json:"offset,omitempty"`
+	Sid        string      `json:"sid,omitempty"`
+	Restored   bool        `json:"restored,omitempty"`
 }
 
 func (r *Reply) GetType() string {
@@ -322,6 +324,10 @@ func ConfirmationMessage(identifier string) string {
 // RejectionMessage returns a subscription rejection message for a specified identifier
 func RejectionMessage(identifier string) string {
 	return string(toJSON(Reply{Identifier: identifier, Type: RejectedType}))
+}
+
+func WelcomeMessage(sid string, restored bool) string {
+	return string(toJSON(Reply{Sid: sid, Type: WelcomeType, Restored: restored}))
 }
 
 func toJSON(msg Reply) []byte {

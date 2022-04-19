@@ -5,6 +5,8 @@ type Config struct {
 	HistoryTTL int64
 	// Max size of messages to keep in the history per stream
 	HistoryLimit int
+	// Sessions cache TTL in seconds (after disconnect)
+	SessionsTTL int64
 }
 
 func NewConfig() *Config {
@@ -13,5 +15,7 @@ func NewConfig() *Config {
 		HistoryTTL: 5 * 60,
 		// 100 msgs by default
 		HistoryLimit: 100,
+		// 5 minutes by default
+		SessionsTTL: 5 * 60,
 	}
 }

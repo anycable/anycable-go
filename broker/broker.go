@@ -17,7 +17,7 @@ type Broadcaster interface {
 // We use interface and not require a string cache entry to be passed to avoid
 // unnecessary dumping when broker doesn't support storing sessions.
 type Cacheable interface {
-	ToCacheEntry() string
+	ToCacheEntry() ([]byte, error)
 }
 
 // Broker is responsible for:
@@ -41,8 +41,10 @@ type Broker interface {
 
 	// Saves session's state in cache
 	CommitSession(sid string, session Cacheable) error
-	// Fetches session's state from cache and remove the entry (to avoid double-read)
-	RestoreSession(from string, to string) (string, error)
+	// Fetches session's state from cache (by session id)
+	RestoreSession(from string) ([]byte, error)
+	// Marks session as finished (for cache expiration)
+	FinishSession(sid string) error
 }
 
 type StreamsTracker struct {
@@ -135,6 +137,10 @@ func (LegacyBroker) CommitSession(sid string, session Cacheable) error {
 	return nil
 }
 
-func (LegacyBroker) RestoreSession(from string, to string) (string, error) {
-	return "", nil
+func (LegacyBroker) RestoreSession(from string) ([]byte, error) {
+	return nil, nil
+}
+
+func (LegacyBroker) FinishSession(sid string) error {
+	return nil
 }

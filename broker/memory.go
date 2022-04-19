@@ -111,14 +111,26 @@ func (ms *memstream) filterByTime(since int64, callback func(e *entry)) error {
 	return nil
 }
 
-type Memory struct {
-	broadcaster Broadcaster
-	config      *Config
-	tracker     *StreamsTracker
-	streams     map[string]*memstream
-	epoch       string
+type sessionEntry struct {
+	data []byte
+}
 
-	mu sync.RWMutex
+type expireSessionEntry struct {
+	deadline int64
+	sid      string
+}
+
+type Memory struct {
+	broadcaster    Broadcaster
+	config         *Config
+	tracker        *StreamsTracker
+	epoch          string
+	streams        map[string]*memstream
+	sessions       map[string]*sessionEntry
+	expireSessions []*expireSessionEntry
+
+	streamsMu  sync.RWMutex
+	sessionsMu sync.RWMutex
 }
 
 func NewMemoryBroker(node Broadcaster, config *Config) *Memory {
@@ -129,6 +141,7 @@ func NewMemoryBroker(node Broadcaster, config *Config) *Memory {
 		config:      config,
 		tracker:     NewStreamsTracker(),
 		streams:     make(map[string]*memstream),
+		sessions:    make(map[string]*sessionEntry),
 		epoch:       epoch,
 	}
 }
@@ -231,15 +244,47 @@ func (b *Memory) HistorySince(name string, ts int64) ([]common.StreamMessage, er
 }
 
 func (b *Memory) CommitSession(sid string, session Cacheable) error {
+	b.sessionsMu.Lock()
+	defer b.sessionsMu.Unlock()
+
+	cached, err := session.ToCacheEntry()
+
+	if err != nil {
+		return err
+	}
+
+	b.sessions[sid] = &sessionEntry{data: cached}
+
 	return nil
 }
 
-func (b *Memory) RestoreSession(from string, to string) (string, error) {
-	return "", nil
+func (b *Memory) RestoreSession(from string) ([]byte, error) {
+	b.sessionsMu.RLock()
+	defer b.sessionsMu.RUnlock()
+
+	if cached, ok := b.sessions[from]; ok {
+		return cached.data, nil
+	}
+
+	return nil, nil
+}
+
+func (b *Memory) FinishSession(sid string) error {
+	b.sessionsMu.Lock()
+	defer b.sessionsMu.Unlock()
+
+	if _, ok := b.sessions[sid]; ok {
+		b.expireSessions = append(
+			b.expireSessions,
+			&expireSessionEntry{sid: sid, deadline: time.Now().Unix() + b.config.SessionsTTL},
+		)
+	}
+
+	return nil
 }
 
 func (b *Memory) add(name string, data string) uint64 {
-	b.mu.Lock()
+	b.streamsMu.Lock()
 
 	if _, ok := b.streams[name]; !ok {
 		b.streams[name] = &memstream{
@@ -251,14 +296,14 @@ func (b *Memory) add(name string, data string) uint64 {
 
 	stream := b.streams[name]
 
-	b.mu.Unlock()
+	b.streamsMu.Unlock()
 
 	return stream.add(data)
 }
 
 func (b *Memory) get(name string) *memstream {
-	b.mu.RLock()
-	defer b.mu.RUnlock()
+	b.streamsMu.RLock()
+	defer b.streamsMu.RUnlock()
 
 	return b.streams[name]
 }
@@ -271,10 +316,29 @@ func (b *Memory) expireLoop() {
 }
 
 func (b *Memory) expire() {
-	b.mu.Lock()
-	defer b.mu.Unlock()
+	b.streamsMu.Lock()
 
 	for _, stream := range b.streams {
 		stream.expire()
 	}
+
+	b.streamsMu.Unlock()
+
+	b.sessionsMu.Lock()
+
+	now := time.Now().Unix()
+	i := 0
+
+	for _, expired := range b.expireSessions {
+		if expired.deadline < now {
+			delete(b.sessions, expired.sid)
+			i++
+			continue
+		}
+		break
+	}
+
+	b.expireSessions = b.expireSessions[i:]
+
+	b.sessionsMu.Unlock()
 }
