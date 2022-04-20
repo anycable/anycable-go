@@ -14,7 +14,10 @@ import (
 	nanoid "github.com/matoous/go-nanoid"
 )
 
-const remoteAddrHeader = "REMOTE_ADDR"
+const (
+	remoteAddrHeader  = "REMOTE_ADDR"
+	prevSessionHeader = "X-ANYCABLE-RESTORE-SID"
+)
 
 type RequestInfo struct {
 	UID     string
@@ -104,6 +107,12 @@ func FetchHeaders(r *http.Request, list []string) map[string]string {
 		res[header] = r.Header.Get(header)
 	}
 	res[remoteAddrHeader], _, _ = net.SplitHostPort(r.RemoteAddr)
+
+	// FIXME: ws package shouldn't care about this logic
+	if prevSid := r.Header.Get(prevSessionHeader); prevSid != "" {
+		res[prevSessionHeader] = prevSid
+	}
+
 	return res
 }
 

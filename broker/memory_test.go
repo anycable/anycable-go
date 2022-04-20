@@ -12,7 +12,7 @@ func TestExpire(t *testing.T) {
 	config := NewConfig()
 	config.HistoryTTL = 1
 
-	broker := NewMemoryBroker(nil, config)
+	broker := NewMemoryBroker(nil, &config)
 
 	start := time.Now().Unix() - 10
 
@@ -40,7 +40,7 @@ func TestLimit(t *testing.T) {
 	config := NewConfig()
 	config.HistoryLimit = 2
 
-	broker := NewMemoryBroker(nil, config)
+	broker := NewMemoryBroker(nil, &config)
 
 	start := time.Now().Unix() - 10
 
@@ -59,7 +59,7 @@ func TestLimit(t *testing.T) {
 func TestFromOffset(t *testing.T) {
 	config := NewConfig()
 
-	broker := NewMemoryBroker(nil, config)
+	broker := NewMemoryBroker(nil, &config)
 
 	broker.add("test", "a")
 	broker.add("test", "b")

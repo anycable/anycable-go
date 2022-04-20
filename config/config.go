@@ -1,6 +1,7 @@
 package config
 
 import (
+	"github.com/anycable/anycable-go/broker"
 	"github.com/anycable/anycable-go/identity"
 	"github.com/anycable/anycable-go/metrics"
 	"github.com/anycable/anycable-go/node"
@@ -34,6 +35,8 @@ type Config struct {
 	Metrics              metrics.Config
 	JWT                  identity.JWTConfig
 	Rails                rails.Config
+	BrokerAdapter        string
+	Broker               broker.Config
 }
 
 // New returns a new empty config
@@ -49,5 +52,6 @@ func New() Config {
 	config.DisconnectQueue = node.NewDisconnectQueueConfig()
 	config.JWT = identity.NewJWTConfig("")
 	config.Rails = rails.NewConfig()
+	config.Broker = broker.NewConfig()
 	return config
 }

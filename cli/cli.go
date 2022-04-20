@@ -10,6 +10,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/anycable/anycable-go/broker"
 	"github.com/anycable/anycable-go/config"
 	"github.com/anycable/anycable-go/identity"
 	"github.com/anycable/anycable-go/metrics"
@@ -146,6 +147,14 @@ func (r *Runner) Run() error {
 	}
 
 	appNode := node.NewNode(controller, metrics, &config.App)
+
+	appBroker := r.initBroker(appNode, config)
+
+	if appBroker != nil {
+		ctx.Infof(appBroker.Announce())
+		appNode.SetBroker(appBroker)
+	}
+
 	err = appNode.Start()
 
 	if err != nil {
@@ -233,6 +242,15 @@ func (r *Runner) initMetrics(c *metrics.Config) (*metrics.Metrics, error) {
 	}
 
 	return m, nil
+}
+
+func (r *Runner) initBroker(n *node.Node, c *config.Config) broker.Broker {
+	if c.BrokerAdapter == "memory" {
+		b := broker.NewMemoryBroker(n, &c.Broker)
+		return b
+	}
+
+	return nil
 }
 
 func (r *Runner) initController(m *metrics.Metrics, c *config.Config) (node.Controller, error) {

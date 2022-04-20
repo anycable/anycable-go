@@ -253,6 +253,7 @@ func (n *Node) TryRestoreSession(s *Session) (restored bool) {
 	}
 
 	if cached_session == nil {
+		s.Log.Debugf("Couldn't find session to restore from: %s", prev_sid)
 		return false
 	}
 
@@ -262,6 +263,8 @@ func (n *Node) TryRestoreSession(s *Session) (restored bool) {
 		s.Log.Errorf("Failed to restore session from cache %s: %s", prev_sid, err.Error())
 		return false
 	}
+
+	s.Log.Debugf("Session restored from: %s", prev_sid)
 
 	s.Connected = true
 	n.hub.AddSession(s)

@@ -68,6 +68,12 @@ func init() {
 	fs.StringVar(&defaults.HTTPPubSub.Path, "http_broadcast_path", "/_broadcast", "")
 	fs.StringVar(&defaults.HTTPPubSub.Secret, "http_broadcast_secret", "", "")
 
+	fs.StringVar(&defaults.BrokerAdapter, "broker", "", "")
+
+	fs.IntVar(&defaults.Broker.HistoryLimit, "history_limit", defaults.Broker.HistoryLimit, "")
+	fs.Int64Var(&defaults.Broker.HistoryTTL, "history_ttl", defaults.Broker.HistoryTTL, "")
+	fs.Int64Var(&defaults.Broker.SessionsTTL, "sessions_ttl", defaults.Broker.SessionsTTL, "")
+
 	fs.StringVar(&defaults.RPC.Host, "rpc_host", "localhost:50051", "")
 	fs.IntVar(&defaults.RPC.Concurrency, "rpc_concurrency", 28, "")
 	fs.BoolVar(&defaults.RPC.EnableTLS, "rpc_enable_tls", false, "")

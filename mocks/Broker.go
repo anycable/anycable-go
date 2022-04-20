@@ -11,6 +11,20 @@ type Broker struct {
 	mock.Mock
 }
 
+// Announce provides a mock function with given fields:
+func (_m *Broker) Announce() string {
+	ret := _m.Called()
+
+	var r0 string
+	if rf, ok := ret.Get(0).(func() string); ok {
+		r0 = rf()
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+
+	return r0
+}
+
 // CommitSession provides a mock function with given fields: sid, session
 func (_m *Broker) CommitSession(sid string, session broker.Cacheable) error {
 	ret := _m.Called(sid, session)

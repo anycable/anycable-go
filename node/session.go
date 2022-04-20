@@ -16,7 +16,7 @@ import (
 const (
 	writeWait = 10 * time.Second
 
-	prevSessionHeader = "x-anycable-restore-sid"
+	prevSessionHeader = "X-ANYCABLE-RESTORE-SID"
 	prevSessionParam  = "sid"
 )
 
@@ -430,6 +430,9 @@ func (s *Session) PrevSid() (psid string) {
 	if s.env.Headers != nil {
 		if v, ok := (*s.env.Headers)[prevSessionHeader]; ok {
 			psid = v
+			// This header is of one-time use,
+			// no need to leak it to the RPC app
+			delete(*s.env.Headers, prevSessionHeader)
 			return
 		}
 	}

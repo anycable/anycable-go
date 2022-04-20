@@ -28,6 +28,8 @@ type Broker interface {
 	Start() error
 	Shutdown() error
 
+	Announce() string
+
 	HandleBroadcast(msg *common.StreamMessage)
 
 	// Registers the stream and returns its (short) unique identifier
@@ -109,6 +111,10 @@ func (LegacyBroker) Start() error {
 
 func (LegacyBroker) Shutdown() error {
 	return nil
+}
+
+func (LegacyBroker) Announce() string {
+	return ""
 }
 
 func (b *LegacyBroker) HandleBroadcast(msg *common.StreamMessage) {

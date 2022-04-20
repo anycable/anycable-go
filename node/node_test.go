@@ -512,7 +512,7 @@ func TestRestoreSession(t *testing.T) {
 	session := NewMockSession("214", &node)
 
 	t.Run("Successful restore via header", func(t *testing.T) {
-		session.env.SetHeader("x-anycable-restore-sid", "114")
+		session.env.SetHeader("X-ANYCABLE-RESTORE-SID", "114")
 
 		res, err := node.Authenticate(session)
 		require.NoError(t, err)
@@ -582,7 +582,7 @@ func TestRestoreSession(t *testing.T) {
 			On("RestoreSession", "114").
 			Return(nil, nil)
 
-		session.env.SetHeader("x-anycable-restore-sid", "114")
+		session.env.SetHeader("-anycable-restore-sid", "114")
 
 		session = NewMockSession("154", &node)
 

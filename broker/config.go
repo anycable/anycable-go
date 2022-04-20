@@ -9,8 +9,8 @@ type Config struct {
 	SessionsTTL int64
 }
 
-func NewConfig() *Config {
-	return &Config{
+func NewConfig() Config {
+	return Config{
 		// 5 minutes by default
 		HistoryTTL: 5 * 60,
 		// 100 msgs by default
