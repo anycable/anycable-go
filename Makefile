@@ -115,6 +115,9 @@ test-conformance-ssl: tmp/anycable-go-test
 test-conformance-http: tmp/anycable-go-test
 	BUNDLE_GEMFILE=.circleci/Gemfile ANYCABLE_BROADCAST_ADAPTER=http ANYCABLE_HTTP_BROADCAST_SECRET=any_secret bundle exec anyt -c "tmp/anycable-go-test --headers=cookie,x-api-token" --target-url="ws://localhost:8080/cable"
 
+test-conformance-http-broker: tmp/anycable-go-test
+	BUNDLE_GEMFILE=.circleci/Gemfile ANYCABLE_BROKER=memory ANYCABLE_BROADCAST_ADAPTER=http ANYCABLE_HTTP_BROADCAST_SECRET=any_secret bundle exec anyt -c "tmp/anycable-go-test --headers=cookie,x-api-token" --target-url="ws://localhost:8080/cable" --require=etc/anyt/broker_tests/*.rb
+
 test-conformance-all: test-conformance test-conformance-ssl test-conformance-http
 
 test-ci: prepare prepare-mruby test test-conformance
