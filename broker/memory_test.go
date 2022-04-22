@@ -34,6 +34,14 @@ func TestExpire(t *testing.T) {
 	assert.Equal(t, "c", history[0].Data)
 	assert.EqualValues(t, 4, history[1].Offset)
 	assert.Equal(t, "d", history[1].Data)
+
+	time.Sleep(2 * time.Second)
+
+	broker.expire()
+
+	history, err = broker.HistorySince("test", start)
+	require.NoError(t, err)
+	assert.Nil(t, history)
 }
 
 func TestLimit(t *testing.T) {

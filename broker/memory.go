@@ -78,7 +78,12 @@ func (ms *memstream) expire() {
 	}
 
 	ms.data = ms.data[cutIndex:]
-	ms.low = ms.data[0].offset
+
+	if len(ms.data) > 0 {
+		ms.low = ms.data[0].offset
+	} else {
+		ms.low = 0
+	}
 }
 
 func (ms *memstream) filterByOffset(offset uint64, callback func(e *entry)) error {
@@ -328,8 +333,18 @@ func (b *Memory) expireLoop() {
 func (b *Memory) expire() {
 	b.streamsMu.Lock()
 
-	for _, stream := range b.streams {
+	toDelete := []string{}
+
+	for name, stream := range b.streams {
 		stream.expire()
+
+		if stream.low == 0 {
+			toDelete = append(toDelete, name)
+		}
+	}
+
+	for _, name := range toDelete {
+		delete(b.streams, name)
 	}
 
 	b.streamsMu.Unlock()
