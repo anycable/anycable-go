@@ -161,7 +161,7 @@ func TestIntegrationRestore(t *testing.T) {
 
 		new_session := NewMockSessionWithEnv("s42", node, fmt.Sprintf("ws://test.anycable.io/cable?sid=%s", sid), nil)
 
-		time.Sleep(3 * time.Second)
+		time.Sleep(4 * time.Second)
 
 		_, err = node.Authenticate(new_session)
 		require.NoError(t, err)
