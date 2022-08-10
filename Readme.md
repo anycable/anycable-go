@@ -80,6 +80,7 @@ make prepare
 make test-conformance
 
 # Run integration benchmarks
+npm i -g websocket-bench
 make benchmarks
 ```
 

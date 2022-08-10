@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/anycable/anycable-go/common"
 	"github.com/anycable/anycable-go/config"
+	"github.com/anycable/anycable-go/ext"
 	"github.com/anycable/anycable-go/identity"
 	"github.com/anycable/anycable-go/metrics"
 	"github.com/anycable/anycable-go/mrb"
@@ -26,6 +26,7 @@ import (
 	"github.com/anycable/anycable-go/ws"
 	"github.com/apex/log"
 	"github.com/gorilla/websocket"
+	"github.com/joomcode/errorx"
 	"github.com/syossan27/tebata"
 
 	"go.uber.org/automaxprocs/maxprocs"
@@ -41,12 +42,16 @@ type Shutdownable interface {
 }
 
 type Runner struct {
-	name                string
-	config              *config.Config
-	controllerFactory   controllerFactory
-	disconnectorFactory disconnectorFactory
-	subscriberFactory   subscriberFactory
-	websocketHandler    websocketHandler
+	options []Option
+
+	name   string
+	config *config.Config
+	log    *log.Entry
+
+	controllerFactory       controllerFactory
+	disconnectorFactory     disconnectorFactory
+	subscriberFactory       subscriberFactory
+	websocketHandlerFactory websocketHandler
 
 	router *router.RouterController
 
@@ -54,238 +59,244 @@ type Runner struct {
 	shutdownables []Shutdownable
 }
 
-func NewRunner(name string, config *config.Config) *Runner {
-	if name == "" {
-		name = "AnyCable"
-	}
-
-	if config == nil {
-		c, err := Config(os.Args[1:])
-
-		if err != nil {
-			panic(err)
-		}
-
-		config = &c
-	}
-
-	// Set global HTTP params as early as possible to make sure all servers use them
-	server.SSL = &config.SSL
-	server.Host = config.Host
-	server.MaxConn = config.MaxConn
-
+// NewRunner creates returns new Runner structure
+func NewRunner(c *config.Config, options []Option) *Runner {
 	return &Runner{
-		name:          name,
-		config:        config,
+		options:       options,
+		config:        c,
 		shutdownables: []Shutdownable{},
 		errChan:       make(chan error),
 	}
 }
 
-func (r *Runner) ControllerFactory(fn controllerFactory) {
-	r.controllerFactory = fn
+// checkAndSetDefaults applies passed options and checks that all required fields are set
+func (r *Runner) checkAndSetDefaults() error {
+	server.SSL = &r.config.SSL
+	server.Host = r.config.Host
+	server.MaxConn = r.config.MaxConn
+
+	for _, o := range r.options {
+		err := o(r)
+		if err != nil {
+			return err
+		}
+	}
+
+	if r.name == "" {
+		return errorx.AssertionFailed.New("Name is blank, specify WithName()")
+	}
+
+	if r.controllerFactory == nil {
+		return errorx.AssertionFailed.New("Controller is blank, specify WithController()")
+	}
+
+	if r.subscriberFactory == nil {
+		return errorx.AssertionFailed.New("Subscriber is blank, specify WithController()")
+	}
+
+	if r.disconnectorFactory == nil {
+		r.disconnectorFactory = r.defaultDisconnector
+	}
+
+	if r.websocketHandlerFactory == nil {
+		r.websocketHandlerFactory = r.defaultWebSocketHandler
+	}
+
+	err := utils.InitLogger(r.config.LogFormat, r.config.LogLevel)
+	if err != nil {
+		return errorx.Decorate(err, "!!! Failed to initialize logger !!!")
+	}
+
+	r.log = log.WithFields(log.Fields{"context": "main"})
+
+	return nil
 }
 
-func (r *Runner) DisconnectorFactory(fn disconnectorFactory) {
-	r.disconnectorFactory = fn
-}
-
-func (r *Runner) SubscriberFactory(fn subscriberFactory) {
-	r.subscriberFactory = fn
-}
-
-func (r *Runner) WebsocketHandler(fn websocketHandler) {
-	r.websocketHandler = fn
-}
-
+// Run starts the instance
 func (r *Runner) Run() error {
-	if ShowVersion() {
-		fmt.Println(version.Version())
-		return nil
-	}
-
-	if ShowHelp() {
-		PrintHelp()
-		return nil
-	}
-
-	// See https://github.com/uber-go/automaxprocs/issues/18
-	nopLog := func(string, ...interface{}) {}
-	maxprocs.Set(maxprocs.Logger(nopLog)) // nolint:errcheck
-
-	config := r.config
-
-	// init logging
-	err := utils.InitLogger(config.LogFormat, config.LogLevel)
-
+	err := r.checkAndSetDefaults()
 	if err != nil {
-		return fmt.Errorf("!!! Failed to initialize logger !!!\n%v", err)
+		return err
 	}
 
-	ctx := log.WithFields(log.Fields{"context": "main"})
+	r.setMaxProcs()
+	r.announceDebugMode()
+	r.initMRubyAndAnnounce()
 
-	if DebugMode() {
-		ctx.Debug("🔧 🔧 🔧 Debug mode is on 🔧 🔧 🔧")
-	}
-
-	mrubySupport := r.initMRuby()
-	numProcs := runtime.GOMAXPROCS(0)
-
-	ctx.Infof("Starting %s %s%s (pid: %d, open file limit: %s, gomaxprocs: %d)", r.name, version.Version(), mrubySupport, os.Getpid(), utils.OpenFileLimit(), numProcs)
-
-	metrics, err := r.initMetrics(&config.Metrics)
-
+	natsService, err := r.startNATSService()
 	if err != nil {
-		return fmt.Errorf("!!! Failed to initialize metrics writer !!!\n%v", err)
+		return errorx.Decorate(err, "!!! Failed to start NATS service")
 	}
 
-	r.shutdownables = append(r.shutdownables, metrics)
-
-	controller, err := r.initController(metrics, config)
-
+	metrics, err := metrics.NewFromConfig(&r.config.Metrics)
 	if err != nil {
-		return fmt.Errorf("!!! Failed to initialize controller !!!\n%v", err)
+		return errorx.Decorate(err, "!!! Failed to initialize metrics writer !!!")
 	}
 
-	if config.JWT.Enabled() {
-		identifier := identity.NewJWTIdentifier(&config.JWT)
-		controller = identity.NewIdentifiableController(controller, identifier)
-		ctx.Infof("JWT identification is enabled (param: %s, enforced: %v)", config.JWT.Param, config.JWT.Force)
+	controller, err := r.newController(metrics)
+	if err != nil {
+		return err
 	}
 
-	if !r.Router().Empty() {
-		r.Router().SetDefault(controller)
-		controller = r.Router()
-		ctx.Infof("Using channels router: %s", strings.Join(r.Router().Routes(), ", "))
-	}
-
-	appNode := node.NewNode(controller, metrics, &config.App)
+	appNode := node.NewNode(controller, metrics, &r.config.App)
 	err = appNode.Start()
 
 	if err != nil {
-		return fmt.Errorf("!!! Failed to initialize application !!!\n%v", err)
+		return errorx.Decorate(err, "!!! Failed to initialize application !!!")
 	}
 
-	disconnector, err := r.initDisconnector(appNode, config)
-
+	disconnector, err := r.disconnectorFactory(appNode, r.config)
 	if err != nil {
-		return fmt.Errorf("!!! Failed to initialize disconnector !!!\n%v", err)
+		return errorx.Decorate(err, "!!! Failed to initialize disconnector !!!")
 	}
 
 	go disconnector.Run() // nolint:errcheck
 	appNode.SetDisconnector(disconnector)
 
-	subscriber, err := r.initSubscriber(appNode, config)
-
+	subscriber, err := r.subscriberFactory(appNode, r.config)
 	if err != nil {
-		return fmt.Errorf("couldn't configure pub/sub: %v", err)
+		return errorx.Decorate(err, "couldn't configure pub/sub")
 	}
 
-	r.shutdownables = append(r.shutdownables, subscriber)
-
-	if subscribeErr := subscriber.Start(r.errChan); subscribeErr != nil {
-		return fmt.Errorf("!!! Subscriber failed !!!\n%v", subscribeErr)
-	}
-
-	if contrErr := controller.Start(); contrErr != nil {
-		return fmt.Errorf("!!! RPC failed !!!\n%v", contrErr)
-	}
-
-	wsServer, err := server.ForPort(strconv.Itoa(config.Port))
+	err = subscriber.Start(r.errChan)
 	if err != nil {
-		return fmt.Errorf("!!! Failed to initialize WebSocket server at %s:%s !!!\n%v", err, config.Host, config.Port)
+		return errorx.Decorate(err, "!!! Subscriber failed !!!")
 	}
 
-	r.shutdownables = append(r.shutdownables, wsServer)
-
-	wsHandler, err := r.initWebSocketHandler(appNode, config)
+	err = controller.Start()
 	if err != nil {
-		return fmt.Errorf("!!! Failed to initialize WebSocket handler !!!\n%v", err)
+		return errorx.Decorate(err, "!!! RPC failed !!!")
 	}
 
-	for _, path := range config.Path {
+	wsServer, err := server.ForPort(strconv.Itoa(r.config.Port))
+	if err != nil {
+		return errorx.Decorate(err, "!!! Failed to initialize WebSocket server at %s:%d !!!", r.config.Host, r.config.Port)
+	}
+
+	wsHandler, err := r.websocketHandlerFactory(appNode, r.config)
+	if err != nil {
+		return errorx.Decorate(err, "!!! Failed to initialize WebSocket handler !!!")
+	}
+
+	for _, path := range r.config.Path {
 		wsServer.Mux.Handle(path, wsHandler)
-		ctx.Infof("Handle WebSocket connections at %s%s", wsServer.Address(), path)
+		r.log.Infof("Handle WebSocket connections at %s%s", wsServer.Address(), path)
 	}
 
-	wsServer.Mux.Handle(config.HealthPath, http.HandlerFunc(server.HealthHandler))
-	ctx.Infof("Handle health connections at %s%s", wsServer.Address(), config.HealthPath)
+	wsServer.Mux.Handle(r.config.HealthPath, http.HandlerFunc(server.HealthHandler))
+	r.log.Infof("Handle health connections at %s%s", wsServer.Address(), r.config.HealthPath)
 
-	go func() {
-		if err = wsServer.StartAndAnnounce("WebSocket server"); err != nil {
-			if !wsServer.Stopped() {
-				r.errChan <- fmt.Errorf("WebSocket server at %s stopped: %v", wsServer.Address(), err)
-			}
-		}
-	}()
+	go r.startWSServer(wsServer)
+	go r.startMetrics(metrics)
 
-	go func() {
-		if err := metrics.Run(); err != nil {
-			r.errChan <- fmt.Errorf("!!! Metrics module failed to start !!!\n%v", err)
-		}
-	}()
+	r.shutdownables = []Shutdownable{
+		metrics,
+		subscriber,
+		wsServer,
+		appNode,
+	}
 
-	r.shutdownables = append(r.shutdownables, appNode)
+	if natsService != nil {
+		r.shutdownables = append(r.shutdownables, natsService)
+	}
 
 	r.announceGoPools()
-
 	r.setupSignalHandlers()
 
 	// Wait for an error (or none)
 	return <-r.errChan
 }
 
-func (r *Runner) initMetrics(c *metrics.Config) (*metrics.Metrics, error) {
-	m, err := metrics.FromConfig(c)
+func (r *Runner) setMaxProcs() {
+	// See https://github.com/uber-go/automaxprocs/issues/18
+	nopLog := func(string, ...interface{}) {}
+	maxprocs.Set(maxprocs.Logger(nopLog)) // nolint:errcheck
+}
 
+func (r *Runner) announceDebugMode() {
+	if r.config.Debug {
+		r.log.Debug("🔧 🔧 🔧 Debug mode is on 🔧 🔧 🔧")
+	}
+}
+
+func (r *Runner) initMRubyAndAnnounce() {
+	mrubySupport := r.initMRuby()
+	numProcs := runtime.GOMAXPROCS(0)
+
+	r.log.Infof("Starting %s %s%s (pid: %d, open file limit: %s, gomaxprocs: %d)", r.name, version.Version(), mrubySupport, os.Getpid(), utils.OpenFileLimit(), numProcs)
+}
+
+func (r *Runner) startNATSService() (ext.Service, error) {
+	if !r.config.NATSService.Enable {
+		return nil, nil
+	}
+
+	nats := ext.NewNATSService(r.config.NATSService)
+
+	r.log.Infof("Starting embedded NATS server...")
+
+	err := nats.Start()
 	if err != nil {
-		return nil, err
+		return nil, errorx.Decorate(err, "Failed to start NATS server")
 	}
 
-	return m, nil
+	err = nats.WaitReady()
+	if err != nil {
+		return nil, errorx.Decorate(err, "Failed to start NATS server")
+	}
+
+	r.log.Infof("Embedded NATS server started")
+
+	return nats, nil
 }
 
-func (r *Runner) initController(m *metrics.Metrics, c *config.Config) (node.Controller, error) {
-	if r.controllerFactory == nil {
-		return nil, errors.New("controller factory is not specified")
+func (r *Runner) newController(metrics *metrics.Metrics) (node.Controller, error) {
+	controller, err := r.controllerFactory(metrics, r.config)
+	if err != nil {
+		return nil, errorx.Decorate(err, "!!! Failed to initialize controller !!!")
 	}
 
-	return r.controllerFactory(m, c)
+	if r.config.JWT.Enabled() {
+		identifier := identity.NewJWTIdentifier(&r.config.JWT)
+		controller = identity.NewIdentifiableController(controller, identifier)
+		r.log.Infof("JWT identification is enabled (param: %s, enforced: %v)", r.config.JWT.Param, r.config.JWT.Force)
+	}
+
+	if !r.Router().Empty() {
+		r.Router().SetDefault(controller)
+		controller = r.Router()
+		r.log.Infof("Using channels router: %s", strings.Join(r.Router().Routes(), ", "))
+	}
+
+	return controller, nil
 }
 
-func (r *Runner) initDisconnector(n *node.Node, c *config.Config) (node.Disconnector, error) {
-	if r.disconnectorFactory == nil {
-		return r.defaultDisconnector(n, c)
-	}
+func (r *Runner) startWSServer(wsServer *server.HTTPServer) {
+	go func() {
+		err := wsServer.StartAndAnnounce("WebSocket server")
+		if err != nil {
+			if !wsServer.Stopped() {
+				r.errChan <- fmt.Errorf("WebSocket server at %s stopped: %v", wsServer.Address(), err)
+			}
+		}
+	}()
+}
 
-	return r.disconnectorFactory(n, c)
+func (r *Runner) startMetrics(metrics *metrics.Metrics) {
+	err := metrics.Run()
+	if err != nil {
+		r.errChan <- fmt.Errorf("!!! Metrics module failed to start !!!\n%v", err)
+	}
 }
 
 func (r *Runner) defaultDisconnector(n *node.Node, c *config.Config) (node.Disconnector, error) {
 	if c.DisconnectorDisabled {
 		return node.NewNoopDisconnector(), nil
-	} else {
-		return node.NewDisconnectQueue(n, &c.DisconnectQueue), nil
 	}
+	return node.NewDisconnectQueue(n, &c.DisconnectQueue), nil
 }
 
-func (r *Runner) initSubscriber(n *node.Node, c *config.Config) (pubsub.Subscriber, error) {
-	if r.subscriberFactory == nil {
-		return nil, errors.New("subscriber factory is not specified")
-	}
-
-	return r.subscriberFactory(n, c)
-}
-
-func (r *Runner) initWebSocketHandler(n *node.Node, c *config.Config) (http.Handler, error) {
-	if r.websocketHandler == nil {
-		return r.defaultWebSocketHandler(n, c), nil
-	}
-
-	return r.websocketHandler(n, c)
-}
-
-func (r *Runner) defaultWebSocketHandler(n *node.Node, c *config.Config) http.Handler {
+func (r *Runner) defaultWebSocketHandler(n *node.Node, c *config.Config) (http.Handler, error) {
 	return ws.WebsocketHandler(c.Headers, common.ActionCableProtocols(), &c.WS, func(wsc *websocket.Conn, info *ws.RequestInfo, callback func()) error {
 		wrappedConn := ws.NewConnection(wsc)
 		session := node.NewSession(n, wrappedConn, info.URL, info.Headers, info.UID)
@@ -297,7 +308,7 @@ func (r *Runner) defaultWebSocketHandler(n *node.Node, c *config.Config) http.Ha
 		}
 
 		return session.Serve(callback)
-	})
+	}), nil
 }
 
 func (r *Runner) initMRuby() string {
