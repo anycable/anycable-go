@@ -1,6 +1,7 @@
 package config
 
 import (
+	"github.com/anycable/anycable-go/broker"
 	"github.com/anycable/anycable-go/identity"
 	"github.com/anycable/anycable-go/metrics"
 	"github.com/anycable/anycable-go/node"
@@ -36,6 +37,8 @@ type Config struct {
 	Metrics              metrics.Config
 	JWT                  identity.JWTConfig
 	Rails                rails.Config
+	BrokerAdapter        string
+	Broker               broker.Config
 }
 
 // NewConfig returns a new empty config
@@ -46,6 +49,7 @@ func NewConfig() Config {
 		Path:             []string{"/cable"},
 		HealthPath:       "/health",
 		BroadcastAdapter: "redis",
+		Broker:           broker.NewConfig(),
 		Headers:          []string{"cookie"},
 		LogLevel:         "info",
 		LogFormat:        "text",

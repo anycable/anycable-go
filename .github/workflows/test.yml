@@ -94,6 +94,7 @@ jobs:
           - test-conformance-http
           - test-conformance-nats
           - test-conformance-ssl
+          - test-conformance-http-broker
     runs-on: ubuntu-latest
     env:
       GO111MODULE: on

@@ -38,6 +38,7 @@ func NewConfigFromCLI(args []string) (*config.Config, error, bool) {
 	flags = append(flags, pingCLIFlags(&c)...)
 	flags = append(flags, jwtCLIFlags(&c)...)
 	flags = append(flags, signedStreamsCLIFlags(&c)...)
+	flags = append(flags, brokerCLIFlags(&c)...)
 
 	app := &cli.App{
 		Name:            "anycable-go",
@@ -110,6 +111,7 @@ const (
 	pingCategoryDescription          = "PING:"
 	jwtCategoryDescription           = "JWT:"
 	signedStreamsCategoryDescription = "SIGNED STREAMS:"
+	brokerCategoryDescription        = "BROKER:"
 
 	envPrefix = "ANYCABLE_"
 )
@@ -184,7 +186,12 @@ func broadcastCLIFlags(c *config.Config) []cli.Flag {
 			Value:       c.BroadcastAdapter,
 			Destination: &c.BroadcastAdapter,
 		},
-
+		&cli.StringFlag{
+			Name:        "broker_adapter",
+			Usage:       "Broker adapter (memory)",
+			Value:       c.BrokerAdapter,
+			Destination: &c.BrokerAdapter,
+		},
 		&cli.IntFlag{
 			Name:        "hub_gopool_size",
 			Usage:       "The size of the goroutines pool to broadcast messages",
@@ -530,6 +537,30 @@ func signedStreamsCLIFlags(c *config.Config) []cli.Flag {
 			Name:        "cable_ready_key",
 			Usage:       "Enable CableReady fastlane with the specified signing key",
 			Destination: &c.Rails.CableReadyKey,
+		},
+	})
+}
+
+// brokerCLIFlags returns broker related flags
+func brokerCLIFlags(c *config.Config) []cli.Flag {
+	return withDefaults(brokerCategoryDescription, []cli.Flag{
+		&cli.IntFlag{
+			Name:        "history_limit",
+			Usage:       "Max number of messages to keep in the stream's history",
+			Value:       c.Broker.HistoryLimit,
+			Destination: &c.Broker.HistoryLimit,
+		},
+		&cli.Int64Flag{
+			Name:        "history_ttl",
+			Usage:       "TTL for messages in streams history (seconds)",
+			Value:       c.Broker.HistoryTTL,
+			Destination: &c.Broker.HistoryTTL,
+		},
+		&cli.Int64Flag{
+			Name:        "sessions_ttl",
+			Usage:       "TTL for expired/disconnected sessions (seconds)",
+			Value:       c.Broker.SessionsTTL,
+			Destination: &c.Broker.SessionsTTL,
 		},
 	})
 }
