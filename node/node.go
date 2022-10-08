@@ -11,6 +11,7 @@ import (
 	"github.com/anycable/anycable-go/common"
 	"github.com/anycable/anycable-go/hub"
 	"github.com/anycable/anycable-go/metrics"
+	"github.com/anycable/anycable-go/utils"
 	"github.com/anycable/anycable-go/ws"
 	"github.com/apex/log"
 )
@@ -38,6 +39,8 @@ const (
 
 // AppNode describes a basic node interface
 type AppNode interface {
+	PublishStreamMessage(msg *common.StreamMessage)
+	HandleCommand(msg interface{})
 	HandlePubSub(msg []byte)
 	LookupSession(id string) *Session
 	Authenticate(s *Session) (*common.ConnectResult, error)
@@ -131,6 +134,20 @@ func (n *Node) HandleCommand(s *Session, msg *common.Message) (err error) {
 	}
 
 	return
+}
+
+func (n *Node) PublishMessage(raw []byte) error {
+	msg, err := common.PubSubMessageFromJSON(raw)
+
+	switch v := msg.(type) {
+	case common.StreamMessage:
+		msg, err := n.broker.RecordMessage(&v)
+	}
+
+	msg.NodeID = n.id
+
+	n.pubsub.Publish(msg)
+	n.HandlePubSub(utils.ToJSON(msg))
 }
 
 // HandlePubSub parses incoming pubsub message and broadcast it
