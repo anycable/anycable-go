@@ -22,8 +22,8 @@ type RequestInfo struct {
 	Headers *map[string]string
 }
 
-func NewRequestInfo(r *http.Request, headersToFetch []string) (*RequestInfo, error) {
-	headers := FetchHeaders(r, headersToFetch)
+func NewRequestInfo(r *http.Request, headersToFetch []string, cookiesFilter map[string]bool) (*RequestInfo, error) {
+	headers := FetchHeaders(r, headersToFetch, cookiesFilter)
 	uid, err := FetchUID(r)
 
 	if err != nil {
@@ -36,7 +36,7 @@ func NewRequestInfo(r *http.Request, headersToFetch []string) (*RequestInfo, err
 type sessionHandler = func(conn *websocket.Conn, info *RequestInfo, callback func()) error
 
 // WebsocketHandler generate a new http handler for WebSocket connections
-func WebsocketHandler(headersToFetch []string, subprotocols []string, config *Config, sessionHandler sessionHandler) http.Handler {
+func WebsocketHandler(headersToFetch, subprotocols []string, cookieFilter map[string]bool, config *Config, sessionHandler sessionHandler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := log.WithField("context", "ws")
 
@@ -66,7 +66,7 @@ func WebsocketHandler(headersToFetch []string, subprotocols []string, config *Co
 			url = fmt.Sprintf("%s%s%s", scheme, r.Host, url)
 		}
 
-		info, err := NewRequestInfo(r, headersToFetch)
+		info, err := NewRequestInfo(r, headersToFetch, cookieFilter)
 		if err != nil {
 			CloseWithReason(wsc, websocket.CloseAbnormalClosure, err.Error())
 			return
@@ -103,11 +103,16 @@ func WebsocketHandler(headersToFetch []string, subprotocols []string, config *Co
 }
 
 // FetchHeaders extracts specified headers from request
-func FetchHeaders(r *http.Request, list []string) map[string]string {
+func FetchHeaders(r *http.Request, list []string, cookiesFilter map[string]bool) map[string]string {
 	res := make(map[string]string)
 
 	for _, header := range list {
-		res[header] = r.Header.Get(header)
+		value := r.Header.Get(header)
+		if strings.ToLower(header) == "cookies" {
+			value = parseCookies(value, cookiesFilter)
+		}
+
+		res[header] = value
 	}
 	res[remoteAddrHeader], _, _ = net.SplitHostPort(r.RemoteAddr)
 	return res
@@ -147,4 +152,25 @@ func CheckOrigin(origins string) func(r *http.Request) bool {
 		}
 		return false
 	}
+}
+
+func parseCookies(value string, cookieFilter map[string]bool) string {
+	if len(cookieFilter) == 0 {
+		return value
+	}
+
+	result := ""
+	cookies := strings.Split(value, ";")
+	for _, cookie := range cookies {
+		parts := strings.Split(cookie, "=")
+		if len(parts) != 2 {
+			continue
+		}
+
+		if cookieFilter[parts[0]] {
+			result += cookie + ";"
+		}
+	}
+
+	return result
 }

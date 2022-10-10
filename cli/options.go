@@ -15,7 +15,7 @@ import (
 func NewConfigFromCLI(args []string) (*config.Config, error, bool) {
 	c := config.NewConfig()
 
-	var path, headers string
+	var path, headers, cookieFilter string
 	var helpOrVersionWereShown bool = true
 
 	// Print raw version without prefix
@@ -30,7 +30,7 @@ func NewConfigFromCLI(args []string) (*config.Config, error, bool) {
 	flags = append(flags, redisCLIFlags(&c)...)
 	flags = append(flags, httpBroadcastCLIFlags(&c)...)
 	flags = append(flags, natsCLIFlags(&c)...)
-	flags = append(flags, rpcCLIFlags(&c, &headers)...)
+	flags = append(flags, rpcCLIFlags(&c, &headers, &cookieFilter)...)
 	flags = append(flags, disconnectorCLIFlags(&c)...)
 	flags = append(flags, logCLIFlags(&c)...)
 	flags = append(flags, metricsCLIFlags(&c)...)
@@ -70,6 +70,13 @@ func NewConfigFromCLI(args []string) (*config.Config, error, bool) {
 	}
 
 	c.Headers = strings.Split(strings.ToLower(headers), ",")
+
+	if cookieFilter != "" {
+		c.CookieFilter = make(map[string]bool)
+		for _, cookie := range strings.Split(cookieFilter, ",") {
+			c.CookieFilter[cookie] = true
+		}
+	}
 
 	if c.Debug {
 		c.LogLevel = "debug"
@@ -284,7 +291,7 @@ func natsCLIFlags(c *config.Config) []cli.Flag {
 }
 
 // rpcCLIFlags returns CLI flags for RPC
-func rpcCLIFlags(c *config.Config, headers *string) []cli.Flag {
+func rpcCLIFlags(c *config.Config, headers, cookieFilter *string) []cli.Flag {
 	return withDefaults(rpcCategoryDescription, []cli.Flag{
 		&cli.StringFlag{
 			Name:        "rpc_host",
@@ -325,6 +332,12 @@ func rpcCLIFlags(c *config.Config, headers *string) []cli.Flag {
 			Usage:       "List of headers to proxy to RPC",
 			Value:       strings.Join(c.Headers, ","),
 			Destination: headers,
+		},
+
+		&cli.StringFlag{
+			Name:        "proxy-cookies",
+			Usage:       "Cookie keys to send to RPC, default is all",
+			Destination: cookieFilter,
 		},
 	})
 }
