@@ -25,7 +25,7 @@ type Config struct {
 	Path                 []string
 	HealthPath           string
 	Headers              []string
-	CookieFilter         map[string]bool
+	Cookies              []string
 	SSL                  server.SSLConfig
 	WS                   ws.Config
 	MaxMessageSize       int64
