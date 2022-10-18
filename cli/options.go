@@ -70,7 +70,10 @@ func NewConfigFromCLI(args []string) (*config.Config, error, bool) {
 	}
 
 	c.Headers = strings.Split(strings.ToLower(headers), ",")
-	c.Cookies = strings.Split(cookieFilter, ",")
+
+	if len(cookieFilter) > 0 {
+		c.Cookies = strings.Split(cookieFilter, ",")
+	}
 
 	if c.Debug {
 		c.LogLevel = "debug"
