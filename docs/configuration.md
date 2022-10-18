@@ -30,7 +30,7 @@ RPC service address (default: `"localhost:50051"`).
 
 Comma-separated list of headers to proxy to RPC (default: `"cookie"`).
 
-**--proxy-cookies**
+**--proxy-cookies** (`ANYCABLE_PROXY_COOKIES`)
 
 Comma-separated list of cookies to proxy to RPC (default: all cokies).
 
