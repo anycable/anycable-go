@@ -254,22 +254,22 @@ func (c *Controller) Shutdown() error {
 
 // Authenticate performs Connect RPC call
 func (c *Controller) Authenticate(sid string, env *common.SessionEnv) (*common.ConnectResult, error) {
-	c.metrics.GaugeIncrement(metricsRPCPending)
-	c.barrier.Acquire()
-	c.metrics.GaugeDecrement(metricsRPCPending)
-
-	defer c.barrier.Release()
-
 	op := func() (interface{}, error) {
+		c.metrics.GaugeIncrement(metricsRPCPending)
+		c.barrier.Acquire()
+		c.metrics.GaugeDecrement(metricsRPCPending)
+
+		defer c.barrier.Release()
+
 		return c.client.Connect(
 			newContext(sid),
 			protocol.NewConnectMessage(env),
 		)
 	}
 
-	c.metrics.CounterIncrement(metricsRPCCalls)
-
 	response, err := c.retry(sid, op)
+
+	c.metrics.CounterIncrement(metricsRPCCalls)
 
 	if err != nil {
 		c.metrics.CounterIncrement(metricsRPCFailures)
@@ -293,13 +293,13 @@ func (c *Controller) Authenticate(sid string, env *common.SessionEnv) (*common.C
 
 // Subscribe performs Command RPC call with "subscribe" command
 func (c *Controller) Subscribe(sid string, env *common.SessionEnv, id string, channel string) (*common.CommandResult, error) {
-	c.metrics.GaugeIncrement(metricsRPCPending)
-	c.barrier.Acquire()
-	c.metrics.GaugeDecrement(metricsRPCPending)
-
-	defer c.barrier.Release()
-
 	op := func() (interface{}, error) {
+		c.metrics.GaugeIncrement(metricsRPCPending)
+		c.barrier.Acquire()
+		c.metrics.GaugeDecrement(metricsRPCPending)
+
+		defer c.barrier.Release()
+
 		return c.client.Command(
 			newContext(sid),
 			protocol.NewCommandMessage(env, "subscribe", channel, id, ""),
@@ -313,13 +313,13 @@ func (c *Controller) Subscribe(sid string, env *common.SessionEnv, id string, ch
 
 // Unsubscribe performs Command RPC call with "unsubscribe" command
 func (c *Controller) Unsubscribe(sid string, env *common.SessionEnv, id string, channel string) (*common.CommandResult, error) {
-	c.metrics.GaugeIncrement(metricsRPCPending)
-	c.barrier.Acquire()
-	c.metrics.GaugeDecrement(metricsRPCPending)
-
-	defer c.barrier.Release()
-
 	op := func() (interface{}, error) {
+		c.metrics.GaugeIncrement(metricsRPCPending)
+		c.barrier.Acquire()
+		c.metrics.GaugeDecrement(metricsRPCPending)
+
+		defer c.barrier.Release()
+
 		return c.client.Command(
 			newContext(sid),
 			protocol.NewCommandMessage(env, "unsubscribe", channel, id, ""),
@@ -333,13 +333,13 @@ func (c *Controller) Unsubscribe(sid string, env *common.SessionEnv, id string, 
 
 // Perform performs Command RPC call with "perform" command
 func (c *Controller) Perform(sid string, env *common.SessionEnv, id string, channel string, data string) (*common.CommandResult, error) {
-	c.metrics.GaugeIncrement(metricsRPCPending)
-	c.barrier.Acquire()
-	c.metrics.GaugeDecrement(metricsRPCPending)
-
-	defer c.barrier.Release()
-
 	op := func() (interface{}, error) {
+		c.metrics.GaugeIncrement(metricsRPCPending)
+		c.barrier.Acquire()
+		c.metrics.GaugeDecrement(metricsRPCPending)
+
+		defer c.barrier.Release()
+
 		return c.client.Command(
 			newContext(sid),
 			protocol.NewCommandMessage(env, "message", channel, id, data),
@@ -353,22 +353,22 @@ func (c *Controller) Perform(sid string, env *common.SessionEnv, id string, chan
 
 // Disconnect performs disconnect RPC call
 func (c *Controller) Disconnect(sid string, env *common.SessionEnv, id string, subscriptions []string) error {
-	c.metrics.GaugeIncrement(metricsRPCPending)
-	c.barrier.Acquire()
-	c.metrics.GaugeDecrement(metricsRPCPending)
-
-	defer c.barrier.Release()
-
 	op := func() (interface{}, error) {
+		c.metrics.GaugeIncrement(metricsRPCPending)
+		c.barrier.Acquire()
+		c.metrics.GaugeDecrement(metricsRPCPending)
+
+		defer c.barrier.Release()
+
 		return c.client.Disconnect(
 			newContext(sid),
 			protocol.NewDisconnectMessage(env, id, subscriptions),
 		)
 	}
 
-	c.metrics.CounterIncrement(metricsRPCCalls)
-
 	response, err := c.retry(sid, op)
+
+	c.metrics.CounterIncrement(metricsRPCCalls)
 
 	if err != nil {
 		c.metrics.CounterIncrement(metricsRPCFailures)
