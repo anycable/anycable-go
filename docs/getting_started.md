@@ -35,4 +35,16 @@ $ anycable-go
 
 By default, `anycable-go` tries to connect to an RPC server listening at `localhost:50051` (the default host for the Ruby gem). You can change this setting by providing `--rpc_host` option or `ANYCABLE_RPC_HOST` env variable (read more about [configuration](./configuration.md)).
 
-All other configuration parameters have the same default values as the corresponding parameters for the AnyCable RPC server, so you don't need to change them usually.
+All other configuration parameters have the same default values as the corresponding parameters for the AnyCable RPC server, so you don't need to change them usually. You can set all parameters using both ways: CLI keys `--host` and environment variables `ANYCABLE_HOST`. Every CLI key option has an alternative env var: `--any_key` -> `ANYCABLE_ANY_KEY`.
+
+For example:
+
+```sh
+anycable-go --statsd_host=localhost:8125
+```
+
+AND
+
+```
+ANYCABLE_STATSD_HOST=localhost:8125 anycable-go
+```
