@@ -212,3 +212,77 @@ INFO 2022-06-30T03:31:21.848Z context=main Starting AnyCable 1.2.0-c4f1c6e (with
 
 [automaxprocs]: https://github.com/uber-go/automaxprocs
 [NATS]: https://nats.io
+
+## All options
+
+| CLI keys | Env variable |
+| ------------- | ------------- |
+| `--host` | `ANYCABLE_HOST` |
+| `--port` | `ANYCABLE_PORT` |
+| `--max-conn` | `ANYCABLE_MAX-CONN` |
+| `--path` | `ANYCABLE_PATH` |
+| `--health-path` | `ANYCABLE_HEALTH-PATH` |
+| `--ssl_cert` | `ANYCABLE_SSL_CERT` |
+| `--ssl_key` | `ANYCABLE_SSL_KEY` |
+| `--broadcast_adapter` | `ANYCABLE_BROADCAST_ADAPTER` |
+| `--hub_gopool_size` | `ANYCABLE_HUB_GOPOOL_SIZE` |
+| `--redis_url` | `ANYCABLE_REDIS_URL` |
+| `--redis_channel` | `ANYCABLE_REDIS_CHANNEL` |
+| `--redis_sentinels` | `ANYCABLE_REDIS_SENTINELS` |
+| `--redis_sentinel_discovery_interval` | `ANYCABLE_REDIS_SENTINEL_DISCOVERY_INTERVAL` |
+| `--redis_keepalive_interval` | `ANYCABLE_REDIS_KEEPALIVE_INTERVAL` |
+| `--redis_tls_verify` | `ANYCABLE_REDIS_TLS_VERIFY` |
+| `--http_broadcast_port` | `ANYCABLE_HTTP_BROADCAST_PORT` |
+| `--http_broadcast_path` | `ANYCABLE_HTTP_BROADCAST_PATH` |
+| `--http_broadcast_secret` | `ANYCABLE_HTTP_BROADCAST_SECRET` |
+| `--nats_servers` | `ANYCABLE_NATS_SERVERS` |
+| `--nats_channel` | `ANYCABLE_NATS_CHANNEL` |
+| `--nats_dont_randomize_servers` | `ANYCABLE_NATS_DONT_RANDOMIZE_SERVERS` |
+| `--embed_nats` | `ANYCABLE_EMBED_NATS` |
+| `--enats_addr` | `ANYCABLE_ENATS_ADDR` |
+| `--enats_cluster` | `ANYCABLE_ENATS_CLUSTER` |
+| `--enats_cluster_name` | `ANYCABLE_ENATS_CLUSTER_NAME` |
+| `--enats_cluster_routes` | `ANYCABLE_ENATS_CLUSTER_ROUTES` |
+| `--enats_gateway` | `ANYCABLE_ENATS_GATEWAY` |
+| `--enats_gateways` | `ANYCABLE_ENATS_GATEWAYS` |
+| `--enats_debug` | `ANYCABLE_ENATS_DEBUG` |
+| `--enats_trace` | `ANYCABLE_ENATS_TRACE` |
+| `--rpc_host` | `ANYCABLE_RPC_HOST` |
+| `--rpc_concurrency` | `ANYCABLE_RPC_CONCURRENCY` |
+| `--rpc_enable_tls` | `ANYCABLE_RPC_ENABLE_TLS` |
+| `--rpc_max_call_recv_size` | `ANYCABLE_RPC_MAX_CALL_RECV_SIZE` |
+| `--rpc_max_call_send_size` | `ANYCABLE_RPC_MAX_CALL_SEND_SIZE` |
+| `--headers` | `ANYCABLE_HEADERS` |
+| `--proxy-cookies` | `ANYCABLE_PROXY-COOKIES` |
+| `--disconnect_rate` | `ANYCABLE_DISCONNECT_RATE` |
+| `--disconnect_timeout` | `ANYCABLE_DISCONNECT_TIMEOUT` |
+| `--disable_disconnect` | `ANYCABLE_DISABLE_DISCONNECT` |
+| `--log_level` | `ANYCABLE_LOG_LEVEL` |
+| `--log_format` | `ANYCABLE_LOG_FORMAT` |
+| `--debug` | `ANYCABLE_DEBUG` |
+| `--metrics_log` | `ANYCABLE_METRICS_LOG` |
+| `--metrics_rotate_interval` | `ANYCABLE_METRICS_ROTATE_INTERVAL` |
+| `--metrics_log_interval` | `ANYCABLE_METRICS_LOG_INTERVAL` |
+| `--metrics_log_filter` | `ANYCABLE_METRICS_LOG_FILTER` |
+| `--metrics_log_formatter` | `ANYCABLE_METRICS_LOG_FORMATTER` |
+| `--metrics_http` | `ANYCABLE_METRICS_HTTP` |
+| `--metrics_host` | `ANYCABLE_METRICS_HOST` |
+| `--metrics_port` | `ANYCABLE_METRICS_PORT` |
+| `--metrics_tags` | `ANYCABLE_METRICS_TAGS` |
+| `--stats_refresh_interval` | `ANYCABLE_STATS_REFRESH_INTERVAL` |
+| `--read_buffer_size` | `ANYCABLE_READ_BUFFER_SIZE` |
+| `--write_buffer_size` | `ANYCABLE_WRITE_BUFFER_SIZE` |
+| `--max_message_size` | `ANYCABLE_MAX_MESSAGE_SIZE` |
+| `--enable_ws_compression` | `ANYCABLE_ENABLE_WS_COMPRESSION` |
+| `--allowed_origins` | `ANYCABLE_ALLOWED_ORIGINS` |
+| `--ping_interval` | `ANYCABLE_PING_INTERVAL` |
+| `--ping_timestamp_precision` | `ANYCABLE_PING_TIMESTAMP_PRECISION` |
+| `--jwt_id_key` | `ANYCABLE_JWT_ID_KEY` |
+| `--jwt_id_param` | `ANYCABLE_JWT_ID_PARAM` |
+| `--jwt_id_enforce` | `ANYCABLE_JWT_ID_ENFORCE` |
+| `--turbo_rails_key` | `ANYCABLE_TURBO_RAILS_KEY` |
+| `--cable_ready_key` | `ANYCABLE_CABLE_READY_KEY` |
+| `--statsd_host` | `ANYCABLE_STATSD_HOST` |
+| `--statsd_prefix` | `ANYCABLE_STATSD_PREFIX` |
+| `--statsd_max_packet_size` | `ANYCABLE_STATSD_MAX_PACKET_SIZE` |
+| `--statsd_tags_format` | `ANYCABLE_STATSD_TAGS_FORMAT` |
