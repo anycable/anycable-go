@@ -48,6 +48,10 @@ During the normal operation, the value should be close to zero most of the a tim
 
 The `goroutines_num` metrics is meant for debugging Go routines leak purposes. The number should be O(N), where N is the `clients_num` value for the OSS version and should be O(1) for the PRO version (unless IO polling is disabled).
 
+### `mem_sys_bytes`
+
+The total bytes of memory obtained from the OS (according to [`runtime.MemStats.Sys`](https://golang.org/pkg/runtime/#MemStats)).
+
 ## Prometheus
 
 To enable a HTTP endpoint to serve [Prometheus](https://prometheus.io)-compatible metrics (disabled by default) you must specify `--metrics_http` option (e.g. `--metrics_http="/metrics"`).
@@ -145,7 +149,7 @@ Metrics are pushed with the `anycable_go.` prefix by default. You can override i
 ```sh
 # HELP anycable_go_clients_num The number of active clients
 # TYPE anycable_go_clients_num gauge
-anycable_go.clients_num 0
+anycable_go.clients_num
 
 # HELP anycable_go.mem_sys_bytes The total bytes of memory obtained from the OS
 # TYPE anycable_go.mem_sys_bytes gauge
