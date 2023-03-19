@@ -178,7 +178,7 @@ anycable_go.disconnect_queue_size
 
 ### Datadog
 
-
+All you need is install [Datadog Agent v6+](https://docs.datadoghq.com/agent) only.
 
 ## Default metrics tags
 
