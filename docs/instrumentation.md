@@ -137,7 +137,7 @@ AnyCable also supports emitting real-time metrics to [StatsD](https://github.com
 For that, you must specify the StatsD server UDP host:
 
 ```sh
-anycable-go -statsd_host=localhost:8125
+anycable-go --statsd_host=localhost:8125
 ```
 
 Metrics are pushed with the `anycable_go.` prefix by default. You can override it by specifying the `statsd_prefix` parameter.
