@@ -185,7 +185,8 @@ anycable_go.disconnect_queue_size
 All you need is install [Datadog Agent v6+](https://docs.datadoghq.com/agent) only.
 
 See:
-  * [AnyCable + Datadog + Heroku](https://docs.anycable.io/deployment/heroku?id=datadog)
+
+* [AnyCable + Datadog + Heroku](https://docs.anycable.io/deployment/heroku?id=datadog)
 
 ## Default metrics tags
 
