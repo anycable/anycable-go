@@ -142,6 +142,44 @@ anycable-go --statsd_host=localhost:8125
 
 Metrics are pushed with the `anycable_go.` prefix by default. You can override it by specifying the `statsd_prefix` parameter.
 
+```sh
+# HELP anycable_go_clients_num The number of active clients
+# TYPE anycable_go_clients_num gauge
+anycable_go.clients_num 0
+
+# HELP anycable_go.mem_sys_bytes The total bytes of memory obtained from the OS
+# TYPE anycable_go.mem_sys_bytes gauge
+anycable_go.mem_sys_bytes
+
+# HELP anycable_go.goroutines_num The number of Go routines
+# TYPE anycable_go.goroutines_num gauge
+anycable_go.goroutines_num
+
+# HELP anycable_go.rpc_pending_num The number of pending RPC calls
+# TYPE anycable_go.rpc_pending_num gauge
+anycable_go.rpc_pending_num
+
+# HELP anycable_go.clients_uniq_num The number of unique clients (with respect to connection identifiers)
+# TYPE anycable_go.clients_uniq_num gauge
+anycable_go.clients_uniq_num
+
+# HELP anycable_go.grpc_active_conn_num The number of active gRPC connections are established
+# TYPE anycable_go.grpc_active_conn_num gauge
+anycable_go.grpc_active_conn_num
+
+# HELP anycable_go.broadcast_streams_num The number of active broadcasting streams
+# TYPE anycable_go_broadcast_streams_num gauge
+anycable_go.broadcast_streams_num
+
+# HELP anycable_go.disconnect_queue_size The size of delayed disconnect
+# TYPE anycable_go.disconnect_queue_size gauge
+anycable_go.disconnect_queue_size
+```
+
+### Datadog
+
+
+
 ## Default metrics tags
 
 You can define global tags (added to every reported metric by default) for Prometheus (reported as labels)
