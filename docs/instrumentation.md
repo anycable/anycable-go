@@ -51,11 +51,6 @@ The `goroutines_num` metrics is meant for debugging Go routines leak purposes. T
 ### `mem_sys_bytes`
 
 The total bytes of memory obtained from the OS (according to [`runtime.MemStats.Sys`](https://golang.org/pkg/runtime/#MemStats)).
-
-### `grpc_active_conn_num`
-
-The number of active gRPC connections are established.
-
 ## Prometheus
 
 To enable a HTTP endpoint to serve [Prometheus](https://prometheus.io)-compatible metrics (disabled by default) you must specify `--metrics_http` option (e.g. `--metrics_http="/metrics"`).
@@ -148,25 +143,22 @@ For that, you must specify the StatsD server UDP host:
 anycable-go -statsd_host=localhost:8125
 ```
 
-Metrics are pushed with the `anycable_go.` prefix by default. You can override it by specifying the `statsd_prefix` parameter. All metrics AnyCable sends via StatsD have `gauge` type. Find more info about StatsD metric types [here](https://github.com/statsd/statsd/blob/master/docs/metric_types.md).
+Metrics are pushed with the `anycable_go.` prefix by default. You can override it by specifying the `statsd_prefix` parameter. Find more info about StatsD metric types [here](https://github.com/statsd/statsd/blob/master/docs/metric_types.md).
+
+
+Example payload:
 
 ```sh
-anycable_go.broadcast_streams_num:0|g
-
-anycable_go.disconnect_queue_size:0|g
-
-anycable_go.rpc_pending_num:0|g
-
-anycable_go.grpc_active_conn_num:0|g
-
-anycable_go.goroutines_num:18|g
-
-anycable_go.mem_sys_bytes:20428040|g
-
+anycable_go.mem_sys_bytes:15516936|g
 anycable_go.clients_num:0|g
-
 anycable_go.clients_uniq_num:0|g
-```
+anycable_go.broadcast_streams_num:0|g
+anycable_go.disconnect_queue_size:0|g
+anycable_go.rpc_pending_num:0|g
+anycable_go.failed_server_msg_total:1|c
+anycable_go.rpc_call_total:1|c
+anycable_go.rpc_retries_total:1|c
+anycable_go.rpc_error_total:1|c
 
 ## Default metrics tags
 
