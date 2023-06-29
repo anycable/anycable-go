@@ -1,11 +1,12 @@
+//go:build !slim
+// +build !slim
+
 package broadcast
 
 import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
-	"math/rand"
 	"strings"
 	"sync"
 	"time"
@@ -14,7 +15,7 @@ import (
 
 	"github.com/apex/log"
 	nanoid "github.com/matoous/go-nanoid"
-	"github.com/rueian/rueidis"
+	"github.com/redis/rueidis"
 )
 
 // RedisBroadcaster represents Redis broadcaster using Redis streams
@@ -95,7 +96,7 @@ func (s *RedisBroadcaster) Shutdown() error {
 
 	res := s.client.Do(
 		context.Background(),
-		s.client.B().XgroupDelconsumer().Key(s.config.Channel).Groupname(s.config.Group).Consumername(s.consumerName).Build(),
+		s.client.B().XgroupDelconsumer().Key(s.config.Channel).Group(s.config.Group).Consumername(s.consumerName).Build(),
 	)
 
 	err := res.Error()
@@ -138,18 +139,16 @@ func (s *RedisBroadcaster) runReader(done chan (error)) {
 	}
 
 	// First, create a consumer group for the stream
-	res := s.client.Do(context.Background(),
-		s.client.B().XgroupCreate().Key(s.config.Channel).Groupname(s.config.Group).Id("$").Mkstream().Build(),
-	)
+	err = s.client.Do(context.Background(),
+		s.client.B().XgroupCreate().Key(s.config.Channel).Group(s.config.Group).Id("$").Mkstream().Build(),
+	).Error()
 
-	if res.Error() != nil {
-		redisErr := res.RedisError()
-
-		if redisErr != nil {
+	if err != nil {
+		if redisErr, ok := rueidis.IsRedisErr(err); ok {
 			if strings.HasPrefix(redisErr.Error(), "BUSYGROUP") {
 				s.log.Debugf("Redis consumer group already exists")
 			} else {
-				s.log.Errorf("Failed to create consumer group: %v", res.RedisError())
+				s.log.Errorf("Failed to create consumer group: %v", err)
 				s.maybeReconnect(done)
 				return
 			}
@@ -299,16 +298,4 @@ func (s *RedisBroadcaster) maybeReconnect(done chan (error)) {
 	s.clientMu.Unlock()
 
 	go s.runReader(done)
-}
-
-func nextRetry(step int) time.Duration {
-	if step == 0 {
-		return 250 * time.Millisecond
-	}
-
-	left := math.Pow(2, float64(step))
-	right := 2 * left
-
-	secs := left + (right-left)*rand.Float64() // nolint:gosec
-	return time.Duration(secs) * time.Second
 }

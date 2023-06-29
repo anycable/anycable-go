@@ -63,6 +63,9 @@ install-with-mruby:
 build:
 	go build $(BUILD_ARGS) -tags "mrb gops" -ldflags $(LD_FLAGS) -o $(OUTPUT) cmd/anycable-go/main.go
 
+build-slim:
+	go build $(BUILD_ARGS) -tags "slim" -ldflags $(LD_FLAGS) -o $(OUTPUT)-slim cmd/anycable-go/main.go
+
 build-gobench:
 	go build -tags "mrb gops" -ldflags $(LD_FLAGS) -o $(GOBENCHDIST) cmd/gobench-cable/main.go
 

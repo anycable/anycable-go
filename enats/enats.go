@@ -1,4 +1,5 @@
-//go:build !freebsd || amd64
+//go:build !slim && (!freebsd || amd64)
+// +build !slim
 // +build !freebsd amd64
 
 package enats
