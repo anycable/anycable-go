@@ -30,10 +30,10 @@ jobs:
         with:
           go-version: 1.20.x
       - name: Set VERSION (if any)
-        if: ${{ contains(github.ref, 'refs/tags/v') }}
+        # if: ${{ contains(github.ref, 'refs/tags/v') }}
         id: version
         run: |
-          echo VERSION=${GITHUB_REF#refs/tags/v} >> $GITHUB_OUTPUT
+          echo VERSION=1.4.0 >> $GITHUB_OUTPUT
       - name: Prepare files for Docker build
         run: |
           cp /etc/ssl/certs/ca-certificates.crt ./.docker/ca-certificates.crt
@@ -51,16 +51,15 @@ jobs:
         id: meta
         uses: docker/metadata-action@v4
         with:
-          flavor: |
-            latest=auto
           images: |
             anycable/anycable-go
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
+            type=raw,value=1.4.0
+            type=raw,value=1.4
+            type=raw,value=1
+            type=raw,value=latest
             type=sha,prefix=
-            type=edge,branch=master
+            type=edge
       - name: Build and push base images
         uses: docker/build-push-action@v4
         with:
@@ -93,22 +92,22 @@ jobs:
             type=semver,pattern={{major}}
             type=sha,prefix=
             type=edge,branch=master
-      - name: Build and push alpine images
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          file: .docker/Dockerfile.alpine
-          push: true
-          platforms: linux/amd64,linux/arm64
-          tags: ${{ steps.meta-alpine.outputs.tags }}
-          labels: |
-            maintainer=Vladimir Dementyev
-            org.opencontainers.image.description=AnyCable WebSocket server
-            org.opencontainers.image.vendor=Evil Martians
-            org.opencontainers.image.url=https://anycable.io
-            org.opencontainers.image.source=https://github.com/anycable/anycable-go
-            org.opencontainers.image.documentation=https://docs.anycable.io
-            org.opencontainers.image.licenses=MIT
+      # - name: Build and push alpine images
+      #   uses: docker/build-push-action@v4
+      #   with:
+      #     context: .
+      #     file: .docker/Dockerfile.alpine
+      #     push: true
+      #     platforms: linux/amd64,linux/arm64
+      #     tags: ${{ steps.meta-alpine.outputs.tags }}
+      #     labels: |
+      #       maintainer=Vladimir Dementyev
+      #       org.opencontainers.image.description=AnyCable WebSocket server
+      #       org.opencontainers.image.vendor=Evil Martians
+      #       org.opencontainers.image.url=https://anycable.io
+      #       org.opencontainers.image.source=https://github.com/anycable/anycable-go
+      #       org.opencontainers.image.documentation=https://docs.anycable.io
+      #       org.opencontainers.image.licenses=MIT
       - name: Build binary with MRuby
         env:
           CGO_ENABLED: "1"
@@ -119,18 +118,13 @@ jobs:
         id: meta-mrb
         uses: docker/metadata-action@v3
         with:
-          flavor: |
-            latest=auto
-            prefix=
-            suffix=-mrb,onlatest=true
           images: |
             anycable/anycable-go
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=sha,prefix=
-            type=edge,branch=master
+            type=raw,value=1.4.0-mrb
+            type=raw,value=1.4-mrb
+            type=raw,value=1-mrb
+            type=raw,value=latest-mrb
       - name: Build and push mrb images
         uses: docker/build-push-action@v4
         with:
