@@ -52,7 +52,7 @@ type Config struct {
 	MaxRecvSize int `toml:"max_recv_size"`
 	// Max send msg size (bytes)
 	MaxSendSize int `toml:"max_send_size"`
-	// Underlying implementation (grpc, http, or none)
+	// Underlying implementation (grpc, http, wsrpc, or none)
 	Implementation string `toml:"implementation"`
 	// Alternative dialer implementation
 	DialFun Dialer
@@ -60,6 +60,9 @@ type Config struct {
 	Secret string `toml:"secret"`
 	// Timeout for HTTP RPC requests (in ms)
 	RequestTimeout int `toml:"http_request_timeout"`
+	// WS RPC settings
+	WSPath string `toml:"ws_path"`
+	WSPort int    `toml:"ws_port"`
 	// SecretBase is a secret used to generate authentication token
 	SecretBase string
 }
@@ -92,6 +95,19 @@ func (c *Config) Impl() string {
 
 	if uri.Scheme == "http" || uri.Scheme == "https" {
 		return "http"
+	}
+
+	if uri.Scheme == "ws" {
+		if c.WSPath == "" {
+			c.WSPath = uri.Path
+		}
+
+		// If still empty, use the default
+		if c.WSPath == "" {
+			c.WSPath = "/__outlet__"
+		}
+
+		return "wsrpc"
 	}
 
 	return "grpc"
