@@ -15,6 +15,7 @@ import (
 	"github.com/anycable/anycable-go/metrics"
 	"github.com/anycable/anycable-go/protocol"
 	"github.com/anycable/anycable-go/utils"
+	"github.com/anycable/anycable-go/wsrpc"
 	"github.com/joomcode/errorx"
 
 	pb "github.com/anycable/anycable-go/protos"
@@ -203,29 +204,49 @@ func (c *Controller) Start() error {
 
 	dialer := c.config.DialFun
 
+	if impl == "wsrpc" || impl == "http" {
+		if c.config.Secret == "" && c.config.SecretBase != "" {
+			secret, verr := utils.NewMessageVerifier(c.config.SecretBase).Sign([]byte(secretKeyPhrase))
+
+			if verr != nil {
+				verr = errorx.Decorate(verr, "failed to auto-generate authentication key for RPC")
+				return verr
+			}
+
+			c.log.Info("auto-generated authorization secret from the application secret")
+			c.config.Secret = string(secret)
+		}
+	}
+
+	var err error
+
 	if dialer == nil {
 		switch impl {
 		case "http":
-			var err error
-
-			if c.config.Secret == "" && c.config.SecretBase != "" {
-				secret, verr := utils.NewMessageVerifier(c.config.SecretBase).Sign([]byte(secretKeyPhrase))
-
-				if verr != nil {
-					verr = errorx.Decorate(verr, "failed to auto-generate authentication key for HTTP RPC")
-					return verr
-				}
-
-				c.log.Info("auto-generated authorization secret from the application secret")
-				c.config.Secret = string(secret)
-			}
-
 			dialer, err = NewHTTPDialer(c.config)
 			if err != nil {
 				return err
 			}
 		case "grpc":
 			dialer = defaultDialer
+		case "wsrpc":
+			wsconf := &wsrpc.Config{
+				Port:   c.config.WSPort,
+				Path:   c.config.WSPath,
+				Secret: c.config.Secret,
+			}
+			wsserver := wsrpc.NewServer(wsconf, c.log)
+
+			wserr := wsserver.Start()
+
+			if wserr != nil {
+				return wserr
+			}
+
+			dialer, err = NewWSDialer(c.config, wsserver)
+			if err != nil {
+				return err
+			}
 		default:
 			return fmt.Errorf("unknown RPC implementation: %s", impl)
 		}
