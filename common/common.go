@@ -61,9 +61,15 @@ const (
 	RejectedType   = "reject_subscription"
 	// Not supported by Action Cable currently
 	UnsubscribedType = "unsubscribed"
+	ErrorType        = "error"
 
 	HistoryConfirmedType = "confirm_history"
 	HistoryRejectedType  = "reject_history"
+
+	PresenceInfoType  = "info"
+	PresenceJoinType  = "join"
+	PresenceLeaveType = "leave"
+	PresenceType      = "presence"
 
 	WhisperType = "whisper"
 )
@@ -79,7 +85,8 @@ const (
 
 // Reserver state fields
 const (
-	WHISPER_STREAM_STATE = "$w"
+	WHISPER_STREAM_STATE  = "$w"
+	PRESENCE_STREAM_STATE = "$p"
 )
 
 // SessionEnv represents the underlying HTTP connection data:
@@ -217,6 +224,25 @@ func (c *ConnectResult) ToCallResult() *CallResult {
 	return &res
 }
 
+type PresenceEvent struct {
+	Type string      `json:"type,omitempty"`
+	Info interface{} `json:"info,omitempty"`
+	ID   string      `json:"id"`
+}
+
+type PresenceInfo struct {
+	// Type is always "presence"
+	Type string `json:"type,omitempty"`
+	// Total number of present clients (uniq)
+	Total int `json:"total"`
+	// Presence records
+	Records []*PresenceEvent `json:"records,omitempty"`
+}
+
+func NewPresenceInfo() *PresenceInfo {
+	return &PresenceInfo{Type: PresenceInfoType}
+}
+
 // CommandResult is a result of performing controller action,
 // which contains informations about streams to subscribe,
 // messages to sent and broadcast.
@@ -228,6 +254,7 @@ type CommandResult struct {
 	StoppedStreams     []string
 	Transmissions      []string
 	Broadcasts         []*StreamMessage
+	Presence           *PresenceEvent
 	CState             map[string]string
 	IState             map[string]string
 	DisconnectInterest int
@@ -301,6 +328,7 @@ type Message struct {
 	Identifier string         `json:"identifier"`
 	Data       interface{}    `json:"data,omitempty"`
 	History    HistoryRequest `json:"history,omitempty"`
+	Presence   *PresenceEvent `json:"presence,omitempty"`
 }
 
 func (m *Message) LogValue() slog.Value {
@@ -464,17 +492,18 @@ func NewDisconnectMessage(reason string, reconnect bool) *DisconnectMessage {
 
 // Reply represents an outgoing client message
 type Reply struct {
-	Type        string      `json:"type,omitempty"`
-	Identifier  string      `json:"identifier,omitempty"`
-	Message     interface{} `json:"message,omitempty"`
-	Reason      string      `json:"reason,omitempty"`
-	Reconnect   bool        `json:"reconnect,omitempty"`
-	StreamID    string      `json:"stream_id,omitempty"`
-	Epoch       string      `json:"epoch,omitempty"`
-	Offset      uint64      `json:"offset,omitempty"`
-	Sid         string      `json:"sid,omitempty"`
-	Restored    bool        `json:"restored,omitempty"`
-	RestoredIDs []string    `json:"restored_ids,omitempty"`
+	Type        string         `json:"type,omitempty"`
+	Identifier  string         `json:"identifier,omitempty"`
+	Message     interface{}    `json:"message,omitempty"`
+	Presence    *PresenceEvent `json:"presence,omitempty"`
+	Reason      string         `json:"reason,omitempty"`
+	Reconnect   bool           `json:"reconnect,omitempty"`
+	StreamID    string         `json:"stream_id,omitempty"`
+	Epoch       string         `json:"epoch,omitempty"`
+	Offset      uint64         `json:"offset,omitempty"`
+	Sid         string         `json:"sid,omitempty"`
+	Restored    bool           `json:"restored,omitempty"`
+	RestoredIDs []string       `json:"restored_ids,omitempty"`
 }
 
 func (r *Reply) LogValue() slog.Value {

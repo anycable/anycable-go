@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
 	"github.com/anycable/anycable-go/common"
+	"github.com/anycable/anycable-go/utils"
 	nanoid "github.com/matoous/go-nanoid"
 )
 
@@ -170,6 +172,59 @@ type expireSessionEntry struct {
 	sid      string
 }
 
+type presenceSessionEntry struct {
+	// stream -> pid
+	streams  map[string]string
+	deadline int64
+}
+
+type presenceEntry struct {
+	info     interface{}
+	id       string
+	sessions []string
+}
+
+func (pe *presenceEntry) remove(sid string) bool {
+	i := -1
+
+	for idx, s := range pe.sessions {
+		if s == sid {
+			i = idx
+			break
+		}
+	}
+
+	if i == -1 {
+		return false
+	}
+
+	pe.sessions = append(pe.sessions[:i], pe.sessions[i+1:]...)
+
+	return len(pe.sessions) == 0
+}
+
+func (pe *presenceEntry) add(sid string, info interface{}) {
+	if !slices.Contains(pe.sessions, sid) {
+		pe.sessions = append(pe.sessions, sid)
+	}
+
+	pe.info = info
+}
+
+type presenceState struct {
+	streams  map[string]map[string]*presenceEntry
+	sessions map[string]*presenceSessionEntry
+
+	mu sync.RWMutex
+}
+
+func newPresenceState() *presenceState {
+	return &presenceState{
+		streams:  make(map[string]map[string]*presenceEntry),
+		sessions: make(map[string]*presenceSessionEntry),
+	}
+}
+
 type Memory struct {
 	broadcaster    Broadcaster
 	config         *Config
@@ -178,6 +233,8 @@ type Memory struct {
 	streams        map[string]*memstream
 	sessions       map[string]*sessionEntry
 	expireSessions []*expireSessionEntry
+
+	presence *presenceState
 
 	streamsMu  sync.RWMutex
 	sessionsMu sync.RWMutex
@@ -195,6 +252,7 @@ func NewMemoryBroker(node Broadcaster, config *Config) *Memory {
 		tracker:     NewStreamsTracker(),
 		streams:     make(map[string]*memstream),
 		sessions:    make(map[string]*sessionEntry),
+		presence:    newPresenceState(),
 		epoch:       epoch,
 	}
 }
@@ -376,16 +434,160 @@ func (b *Memory) RestoreSession(from string) ([]byte, error) {
 
 func (b *Memory) FinishSession(sid string) error {
 	b.sessionsMu.Lock()
-	defer b.sessionsMu.Unlock()
-
 	if _, ok := b.sessions[sid]; ok {
 		b.expireSessions = append(
 			b.expireSessions,
 			&expireSessionEntry{sid: sid, deadline: time.Now().Unix() + b.config.SessionsTTL},
 		)
 	}
+	b.sessionsMu.Unlock()
 
 	return nil
+}
+
+func (b *Memory) FinishPresence(sid string) error {
+	b.presence.mu.Lock()
+
+	if sp, ok := b.presence.sessions[sid]; ok {
+		sp.deadline = time.Now().Unix() + b.config.PresenceTTL
+	}
+
+	b.presence.mu.Unlock()
+
+	return nil
+}
+
+func (b *Memory) PresenceAdd(stream string, sid string, pid string, info interface{}) (*common.PresenceEvent, error) {
+	b.presence.mu.Lock()
+	defer b.presence.mu.Unlock()
+
+	if _, ok := b.presence.streams[stream]; !ok {
+		b.presence.streams[stream] = make(map[string]*presenceEntry)
+	}
+
+	if _, ok := b.presence.sessions[sid]; !ok {
+		b.presence.sessions[sid] = &presenceSessionEntry{
+			streams: make(map[string]string),
+		}
+	}
+
+	if oldPid, ok := b.presence.sessions[sid].streams[stream]; ok && oldPid != pid {
+		return nil, errors.New("presence ID mismatch")
+	}
+
+	b.presence.sessions[sid].streams[stream] = pid
+
+	streamPresence := b.presence.streams[stream]
+
+	newPresence := false
+
+	if _, ok := streamPresence[pid]; !ok {
+		newPresence = true
+		streamPresence[pid] = &presenceEntry{
+			info:     info,
+			id:       pid,
+			sessions: []string{},
+		}
+	}
+
+	streamSessionPresence := streamPresence[pid]
+
+	streamSessionPresence.add(sid, info)
+
+	if newPresence {
+		return &common.PresenceEvent{
+			Type: common.PresenceJoinType,
+			ID:   pid,
+			Info: info,
+		}, nil
+	}
+
+	return nil, nil
+}
+
+func (b *Memory) PresenceRemove(stream string, sid string) (*common.PresenceEvent, error) {
+	b.presence.mu.Lock()
+	defer b.presence.mu.Unlock()
+
+	if _, ok := b.presence.streams[stream]; !ok {
+		return nil, errors.New("stream not found")
+	}
+
+	var pid string
+
+	if ses, ok := b.presence.sessions[sid]; ok {
+		if id, ok := ses.streams[stream]; !ok {
+			return nil, errors.New("presence info not found")
+		} else {
+			pid = id
+		}
+
+		delete(ses.streams, stream)
+
+		if len(ses.streams) == 0 {
+			delete(b.presence.sessions, sid)
+		}
+	}
+
+	streamPresence := b.presence.streams[stream]
+
+	if _, ok := streamPresence[pid]; !ok {
+		return nil, errors.New("presence record not found")
+	}
+
+	streamSessionPresence := streamPresence[pid]
+
+	empty := streamSessionPresence.remove(sid)
+
+	if empty {
+		delete(streamPresence, pid)
+	}
+
+	if len(streamPresence) == 0 {
+		delete(b.presence.streams, stream)
+	}
+
+	if empty {
+		return &common.PresenceEvent{
+			Type: common.PresenceLeaveType,
+			ID:   pid,
+		}, nil
+	}
+
+	return nil, nil
+}
+
+func (b *Memory) PresenceInfo(stream string, opts ...PresenceInfoOption) (*common.PresenceInfo, error) {
+	options := NewPresenceInfoOptions()
+	for _, opt := range opts {
+		opt(options)
+	}
+
+	b.presence.mu.RLock()
+	defer b.presence.mu.RUnlock()
+
+	info := common.NewPresenceInfo()
+
+	if _, ok := b.presence.streams[stream]; !ok {
+		return info, nil
+	}
+
+	streamPresence := b.presence.streams[stream]
+
+	info.Total = len(streamPresence)
+
+	if options.ReturnRecords {
+		info.Records = make([]*common.PresenceEvent, 0, len(streamPresence))
+
+		for _, entry := range streamPresence {
+			info.Records = append(info.Records, &common.PresenceEvent{
+				Info: entry.info,
+				ID:   entry.id,
+			})
+		}
+	}
+
+	return info, nil
 }
 
 func (b *Memory) add(name string, data string) uint64 {
@@ -457,4 +659,71 @@ func (b *Memory) expire() {
 	b.expireSessions = b.expireSessions[i:]
 
 	b.sessionsMu.Unlock()
+
+	// presence expiration
+	b.expirePresence()
+}
+
+func (b *Memory) expirePresence() {
+	b.presence.mu.Lock()
+
+	now := time.Now().Unix()
+	toDelete := []string{}
+
+	for sid, sp := range b.presence.sessions {
+		if sp.deadline > 0 && sp.deadline < now {
+			toDelete = append(toDelete, sid)
+		}
+	}
+
+	leaveMessages := []common.StreamMessage{}
+
+	for _, sid := range toDelete {
+		entry := b.presence.sessions[sid]
+
+		for stream, pid := range entry.streams {
+			if _, ok := b.presence.streams[stream]; !ok {
+				continue
+			}
+
+			if _, ok := b.presence.streams[stream][pid]; !ok {
+				continue
+			}
+
+			streamSessionPresence := b.presence.streams[stream][pid]
+
+			empty := streamSessionPresence.remove(sid)
+
+			if empty {
+				delete(b.presence.streams[stream], pid)
+
+				msg := &common.PresenceEvent{Type: common.PresenceLeaveType, ID: pid}
+
+				leaveMessages = append(leaveMessages, common.StreamMessage{
+					Stream: stream,
+					Data:   string(utils.ToJSON(msg)),
+					Meta: &common.StreamMessageMetadata{
+						BroadcastType: common.PresenceType,
+						Transient:     true,
+					},
+				})
+
+				if len(b.presence.streams[stream]) == 0 {
+					delete(b.presence.streams, stream)
+				}
+			}
+		}
+
+		delete(b.presence.sessions, sid)
+	}
+
+	b.presence.mu.Unlock()
+
+	if b.broadcaster != nil {
+		// TODO: batch broadcast?
+		// FIXME: move broadcasts out of broker
+		for _, msg := range leaveMessages {
+			b.broadcaster.Broadcast(&msg)
+		}
+	}
 }
