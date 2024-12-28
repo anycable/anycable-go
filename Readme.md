@@ -4,6 +4,11 @@
 [![Documentation](https://img.shields.io/badge/docs-link-brightgreen.svg)](https://docs.anycable.io/anycable-go/getting_started)
 # AnyCable WebSocket Server
 
+> [!IMPORTANT]
+> This project has moved to [anycable/anycable](https://github.com/anycable/anycable). Please, follow it for further updates!
+
+---
+
 A real-time server component of [AnyCable](https://anycable.io) (open-source edition). Check out also our
 [Pro](https://docs.anycable.io/pro) and [managed](https://plus.anycable.io) offerings.
 
